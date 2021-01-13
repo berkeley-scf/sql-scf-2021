@@ -35,28 +35,22 @@ unzip tutorial-databases-data.zip
 su - postgres
 psql
 
-## now run commands shown in databases.html to create a database and tables and put data in the tables, but as we'll be acting as the 'docker' user below, make sure to create a 'docker' postgres user using the "create user" syntax seen in databases.html.
+## Now run commands shown in databases.html to create a database and tables and put data in the tables.
 
 exit
-
-#########################################################
-## Connecting to the database from within the container
-#########################################################
-
-Rscript -e "install.packages('RPostgreSQL')"
-
-## Now switch to a non-root user (to mimic how you would usually be operating) and then run R
-sudo -u docker -i
-R
-## now connect to database via R (or Python if you have a container with Python installed) as seen in databases.html
 
 
 ###############################################################################
 ## Connecting to the database from outside the container within an R session
 ###############################################################################
 
+library(RPostgreSQL)
 drv <- dbDriver("PostgreSQL")
 ## Make use of port 63333 on the host machine, which maps to 5432 in the container
 ## as set up at the start of this file.
-db <- dbConnect(drv, dbname = 'wikistats', user = 'docker',
+user = 'paciorek'  
+db <- dbConnect(drv, dbname = 'wikistats', user = user,
                 password = 'test', port = 63333, host = 'localhost')
+
+
+

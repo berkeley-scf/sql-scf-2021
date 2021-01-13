@@ -548,7 +548,12 @@ These keywords are not available in SQLite so the following can only be done in 
 ```{r, eval=FALSE}
 ## Try in postgreSQL, not SQLite
 result <- dbGetQuery(db, "select * from questions_tags where tag SIMILAR TO 'r-%|%-r|r|%-r-%' limit 10")
+## Standard regex for 'any character' doesn't seem to work:
+## result <- dbGetQuery(db, "select * from questions_tags where tag SIMILAR TO 'r-.*|.*-r|r|.*-r-.*' limit 10")
 ```
+
+Note that the matching does not find subsets, unless one uses wildcards at beginning and end of the pattern, so "r" will only find "r" and not, for example, "dyplr".
+
 
 To extract substrings we use SUBSTRING. Postgres requires that the pattern to be extracted be surrounded by `#"` (one could use another character in place of `#`), but for use from R we need to escape the double-quote with a backslash so it is treated as a part of the string passed to Postgres and not treated by R as indicating where the character string stops/starts. 
 
@@ -562,7 +567,7 @@ Note that SQLite provides SUBSTR for substrings, but the flexibility of SUBSTR s
 
 Here is some [documentation on string functions in PostgreSQL](https://www.postgresql.org/docs/current/functions-string.html).
 
-***Challenge***: Select the questions that have "java" in their titles using regular expression syntax.
+***Challenge***: Select the questions that have "java" but not "javascript" in their titles using regular expression syntax.
 
 ***Challenge***: Figure out how to calculate the length (in characters) of the title of each question. 
 
@@ -751,8 +756,7 @@ Some tips for faster queries include:
 
 You can actually examine the query plan that the system is going to use for a query using the EXPLAIN keyword. I suggest trying this in Postgres as the output is more interpretable than SQLite.
 
-
-Now let's see what query plan is involved in a join and when using indexes. 
+First let's see what query plan is involved in a join, comparing an inner join and a cross join.
 
 ```{r, eval=FALSE}
 dbGetQuery(db, "explain select * from questions join questions_tags on
@@ -760,13 +764,39 @@ dbGetQuery(db, "explain select * from questions join questions_tags on
 ```
 
 ```
-                                                                         QUERY PLAN
-1                   Hash Join  (cost=744893.91..2085537.32 rows=39985376 width=118)
-2                     Hash Cond: (questions_tags.questionid = questions.questionid)
-3     ->  Seq Scan on questions_tags  (cost=0.00..634684.76 rows=39985376 width=16)
-4                     ->  Hash  (cost=365970.96..365970.96 rows=13472796 width=102)
-5         ->  Seq Scan on questions  (cost=0.00..365970.96 rows=13472796 width=102)
+                                                                       QUERY PLAN
+1                   Hash Join  (cost=143426.44..493116.49 rows=7107842 width=133)
+2                   Hash Cond: (questions_tags.questionid = questions.questionid)
+3    ->  Seq Scan on questions_tags  (cost=0.00..116595.42 rows=7107842 width=20)
+4                      ->  Hash  (cost=69539.64..69539.64 rows=2456464 width=113)
+5         ->  Seq Scan on questions  (cost=0.00..69539.64 rows=2456464 width=113)
+6                                                                            JIT:
+7                                                                   Functions: 10
+8   Options: Inlining false, Optimization false, Expressions true, Deforming true
 ```
+
+```{r, eval=FALSE}
+dbGetQuery(db, "explain select * from questions cross join questions_tags where
+               questions.questionid = questions_tags.questionid")
+```
+
+```
+                                                                       QUERY PLAN
+1                   Hash Join  (cost=143195.95..492351.62 rows=7097067 width=133)
+2                   Hash Cond: (questions_tags.questionid = questions.questionid)
+3    ->  Seq Scan on questions_tags  (cost=0.00..116418.67 rows=7097067 width=20)
+4                      ->  Hash  (cost=69428.31..69428.31 rows=2452531 width=113)
+5         ->  Seq Scan on questions  (cost=0.00..69428.31 rows=2452531 width=113)
+6                                                                            JIT:
+7                                                                   Functions: 10
+8   Options: Inlining false, Optimization false, Expressions true, Deforming true
+```
+
+We see that the query plan indicates the two queries are using the same steps, with comparable cost.
+
+Here's additional information on interpreting what you see: [https://www.postgresql.org/docs/current/static/using-explain.html](https://www.postgresql.org/docs/current/static/using-explain.html).
+
+Let's consider a join with a filter, with and without indexes.
 
 ```{r, eval=FALSE}
 dbGetQuery(db, "explain select * from questions join questions_tags on
@@ -774,23 +804,25 @@ dbGetQuery(db, "explain select * from questions join questions_tags on
 ```
 
 ```
-                                                                                                QUERY PLAN
-1                                                 Gather  (cost=15339.05..899172.92 rows=687748 width=118)
-2                                                                                       Workers Planned: 2
-3                                        ->  Nested Loop  (cost=14339.05..829398.12 rows=286562 width=118)
-4         ->  Parallel Bitmap Heap Scan on questions_tags  (cost=14338.61..252751.63 rows=286562 width=16)
-5                                                                          Filter: (tag ~~ 'python'::text)
-6               ->  Bitmap Index Scan on questions_tags_tag_idx  (cost=0.00..14166.68 rows=687748 width=0)
-7                                                                       Index Cond: (tag = 'python'::text)
-8                     ->  Index Scan using questions_pkey on questions  (cost=0.43..2.01 rows=1 width=102)
-9                                                     Index Cond: (questionid = questions_tags.questionid)
+                                                                                         QUERY PLAN
+1                                           Gather  (cost=81480.95..148717.61 rows=85695 width=133)
+2                                                                                Workers Planned: 2
+3                           ->  Parallel Hash Join  (cost=80480.95..139148.11 rows=35706 width=133)
+4                                     Hash Cond: (questions.questionid = questions_tags.questionid)
+5                   ->  Parallel Seq Scan on questions  (cost=0.00..53554.26 rows=992826 width=113)
+6                                  ->  Parallel Hash  (cost=80034.62..80034.62 rows=35706 width=20)
+7                ->  Parallel Seq Scan on questions_tags  (cost=0.00..80034.62 rows=35706 width=20)
+8                                                                   Filter: (tag ~~ 'python'::text)
+9                                                                                              JIT:
+10                                                                                    Functions: 12
+11                    Options: Inlining false, Optimization false, Expressions true, Deforming true
 ```
 
 ```{r, eval=FALSE}
 system.time(dbExecute(db, "create index qid_index on questions (questionid)"))  # 5.6 seconds
 system.time(dbExecute(db, "create index tid_index on questions_tags (questionid)"))  # 5.6 seconds
 dbGetQuery(db, "explain select * from questions join questions_tags on
-               questions.questionid = questions_tags.questionid")
+               questions.questionid = questions_tags.questionid where tag like 'python'")
 ```
 
 ```
@@ -802,13 +834,9 @@ dbGetQuery(db, "explain select * from questions join questions_tags on
 5         ->  Seq Scan on questions  (cost=0.00..365970.96 rows=13472796 width=102)
 ```
 
-The "Workers Planned: 2" seems to indicate that there will be some parallelization used, even without us asking for that.
-
-Here's additional information on interpreting what you see: [https://www.postgresql.org/docs/current/static/using-explain.html](https://www.postgresql.org/docs/current/static/using-explain.html).
-
 The main thing to look for is to see if the query will be done by using an index or by sequential scan (i.e., looking at all the rows). 
 
-Let's compare the query plan for doing a set operation versus a join.
+Let's compare the query plan for doing a set operation versus a join. This is the problem where we determined which users had asked a question about R and a question about Python.
 
 ```{r, eval=FALSE}
 ## Set operation
@@ -836,9 +864,6 @@ dbGetQuery(db, "explain select displayname, userid from
                where T1.tag = 'r' and T2.tag = 'python'")
 ```
 
-- inner join versus cross join with where
-- filter w/ and w/o index
-- join versus intersect (see example in set operations section)
 
 ### 5.3.1) Index lookup vs. sequential scan 
 
@@ -892,6 +917,8 @@ Comments:
 
 The syntax is a bit involved, so let's see with a range of examples:
 
+(Note that there are missing ownerids for some of the questions and answers, which makes some of the grouping by ownerid here a bit odd.)
+
  - Aggregate within groups but with one output value per input row
  
 ```{r, eval=TRUE}
@@ -902,6 +929,7 @@ dbGetQuery(db, "select *,
 ```
 
  - Compute cumulative calculations; note the need for the 'order by'
+ 
 ```{r, eval=TRUE}
 ## Rank (based on ordering by creationdate) of questions by owner
 dbGetQuery(db, "select *,
@@ -913,13 +941,14 @@ dbGetQuery(db, "select *,
 ```
 
  - Do a lagged analysis
+ 
 ```{r, eval=TRUE}
 ## Get previous value (based on ordering by creationdate) by owner
 dbGetQuery(db, "select ownerid, creationdate,
                 lag(creationdate, 1) over
                 (partition by ownerid order by creationdate)
                 as previous_date
-                from questions order by ownerid desc limit 5")
+                from questions order by ownerid desc, creationdate limit 10")
 ```
 So one could now calculate the difference between the previous and current date to analyze the time gaps between users posting questions.
 
@@ -939,22 +968,38 @@ that are within 5 Julian days (based on 'creationdate') of each row.
 
 So one could now analyze bursts of activity.
 
-One can also choose a fixed number of rows by replacing 'range' with 'rows'. The ROWS and RANGE syntax allow one to specify the *window frame* in more flexible ways than simply the categories of a categorical variable.
+One can also choose a fixed number of rows by replacing 'range' with 'rows'.
+
+```{r, eval=TRUE}
+## Summarize questions within 5 days of current question 
+dbGetQuery(db, "select ownerid, creationdate,
+                count() over
+                (partition by ownerid order by julianday(creationdate)
+                rows between 5 preceding and 5 following)
+                as n_window
+                from questions where ownerid is not null limit 30")
+```
+
+Let's discuss why `n_window` is not always 11.
+
+The ROWS and RANGE syntax allow one to specify the *window frame* in more flexible ways than simply the categories of a categorical variable.
 
 So the syntax of a window function will generally have these elements:
 
  - a call to some function
  - OVER
- - PARTITION BY (optional)
- - ORDER BY (optional)
- - RANGE or ROW (optional)
+ - some window:
+    - PARTITION BY (optional)
+    - ORDER BY (optional)
+    - RANGE or ROW (optional)
  - AS (optional)
+ - FROM
 
 
 You can also name window functions, which comes in handy if you want multiple functions applied to the same window:
 
 
-```{r, eval=TRUE}
+```{r, eval=FALSE}
 dbGetQuery(db, "select ownerid, creationdate,
                 lag(creationdate, 1) over w as lag1,
                 lag(creationdate, 2) over w as lag2
@@ -967,7 +1012,10 @@ What does that query do?
 
 ***Challenge***: Use a window function to compute the average viewcount for each ownerid for the 10 questions preceding each question.
 
-## 6.1) Putting it all together to do complicated queries
+***Challenge (hard)***: Find the users who have asked one question that is highly-viewed (viewcount > 1000) with their remaining questions not highly-viewed (viewcount < 20).
+
+
+# 7) Putting it all together to do complicated queries
 
 Here are some real-world style questions one might try to create queries to answer. The context would be if you have data on user sessions on a website or data on messages between users. 
 
@@ -975,11 +1023,9 @@ Here are some real-world style questions one might try to create queries to answ
 ```
 date | session_id | user_id | session_time
 ```
-calculate the distribution of the average daily
-total session time in the last month. I.e., you want to get each user's daily average and then find the distribution over users. The output should be something
-like:
+calculate the distribution of the average daily total session time in the last month. I.e., you want to get each user's daily average and then find the distribution over users. The output should be something like:
 ```
-minutes_per_day' | number_of_users
+minutes_per_day | number_of_users
 ```
 
 2) Consider a table of messages of the form
@@ -1001,11 +1047,13 @@ date | sender_id | receiver_id | message_id | interface (web or mobile)
 What is the average (over users) in the average number of messages sent per day for each test group
 if you look at the users who have sent messages only on mobile in the last month.
 
-# 7) Database management and command-line operation
+# 8) Database management and command-line operation
 
 We'll illustrate some basic database management using a different example dataset. This is some data on webtraffic to Wikipedia pages. Note that the input file used here involved some pre-processing relative to the data you get the directly from the Wikistats dataset available through Amazon Web Services (AWS) because in the data posted on AWS, the datetime information is part of the filename.
 
-## 7.1) SQLite
+You'll need to get [this file](http://www.stat.berkeley.edu/share/paciorek/tutorial-wikistats-data.zip), which contains the input data files.
+
+## 8.1) SQLite
 
 #### Setting up a database and using the SQLite command line
 
@@ -1027,7 +1075,7 @@ create table webtraffic
 .quit
 ```
 
-### 7.1.1) Populating a table
+### 8.1.1) Populating a table
 
 Here's an example of reading from multiple files into SQLite using the command line.
 We create a file `import.sql` that has the configuration for the import:
@@ -1046,7 +1094,7 @@ for file in $(ls part*gz); do
 done
 ```
 
-### 7.1.2) Data cleaning
+### 8.1.2) Data cleaning
 
 The problem in this example with importing into SQLite is the presence of double quote (") characters that are not meant to delineate strings but are actually part of a field. In this case probably the easiest thing is simply to strip out those quotes from UNIX. Here we use `sed` to search and replace to create versions of the input files that don't have the quotes.
 
@@ -1058,19 +1106,15 @@ done
 
 If you want to read the data into SQLite yourself, you *will* need to do something about the quotes; I haven't stripped them out of the files.
 
-## 7.2) PostgreSQL
+## 8.2) PostgreSQL
 
-- create db on scf or in container
-- show access to db from another machine
-- show port forwarding?
-
-### 7.2.1) Setting up a database and using the Postgres command line
+### 8.2.1) Setting up a database and using the Postgres command line
 
 First make sure Postgres is installed on your machine.
 
-On Ubuntu, you can install Postgres easily via `apt-get`:
+On Ubuntu (or Debian) Linux, you can install Postgres easily via `apt-get`:
 ```
-sudo apt-get install postgresql postgresql-contrib
+sudo apt-get install -y postgresql postgresql-contrib
 ```
 
 Next we'll see how to set up a database. You'll generally need to operate as the `postgres` user for these sorts of manipulations. Of course if you're just a user accessing an existing database and existing tables, you don't need to worry about this.
@@ -1081,8 +1125,6 @@ psql  # start postgres interpreter
 ```
 
 Now from within the Postgres interpreter, you can create a database, tables within the database, and authenticate users to do things with those tables. 
-
-In this case we'll be explicit about where on the disk filesystem the database is stored, but you probably only need to worry about this if you are creating a large database. 
 
 ```
 create database wikistats;
@@ -1116,7 +1158,7 @@ create user paciorek with password 'test';
 grant all privileges on database wikistats to paciorek;
 ```
 
-### 7.2.2) Populating a table 
+### 8.2.2) Populating a table 
 
 Here's an example of importing a single file into Postgres from within the psql interpreter running as the special postgres user. In this case we have space-delimited text files. You can obtain the file `part-00000` as discussed in the introduction (you'll need to run `gunzip part-00000.gz` first).
 
@@ -1152,13 +1194,13 @@ done
 Using `\copy` as above invokes the psql `copy` command (`copy` would invoke the standard SQL `copy` command), which allows one to operate as a regular user and to use relative paths. In turn `\copy` invokes `copy` in a specific way. 
 
 
-### 7.2.3) Data cleaning
+### 8.2.3) Data cleaning
 
 One complication is that often the input files will have anomalies in them. Examples include missing columns for some rows, individual elements in a column that are not of the correct type (e.g., a string in a numeric column), and characters that can't be handled. In the Wikistats data case, one issue was lines without the full set of columns and another was the presence of a backslash character at the end of the text for a column.
 
 With large amounts of data or many files, this can be a hassle to deal with. UNIX shell commands can sometimes be quite helpful, including use of sed and awk. Or one might preprocess files in chunks using Python. 
 
-For example the following shell scripting loop over Wikistats files ensures each row has 6 fields/columns by pulling out only rows with the full set of columns. I used this to process the input files before copying into Postgres as done above. Actually there was even more preprocessing because in the form of the data available from Amazon's storage service, the date/time information was part of the filename and not part of the data files. 
+For example the following shell scripting loop over Wikistats files ensures each row has 6 fields/columns by pulling out only rows with the full set of columns. I used this to process the input files before copying into Postgres as done above. 
 
 ```{bash}
 for file in $(ls *gz); do
@@ -1168,8 +1210,9 @@ done
 
 Note that this restriction to rows with a full set of fields has already been done in the data files I provide to you.
 
+Actually there was even more preprocessing because in the form of the data available from Amazon's storage service, the date/time information was part of the filename and not part of the data files. 
 
-# 8) References
+# 9) References
 
 In addition to various material found online, including various software manuals and vignettes, much of the SQL material was based on the following two sources:
 

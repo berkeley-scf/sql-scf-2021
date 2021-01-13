@@ -265,27 +265,28 @@ hr {
 <p>The database we&#39;ll work with as our example is meta-data on questions and answers on the Stack Overflow code discussion website from 2016. We don&#39;t have the full text of the questions or the answers, but we do have:</p>
 
 <ul>
-<li>the question and answer titles,</li>
+<li>the question title and date posted,</li>
+<li>the date posted for each answer,</li>
 <li>some information about how popular the questions and answers were,</li>
 <li>information about the users posting questions or answers, and</li>
 <li>the topics (tags) associated with each question.</li>
 </ul>
 
-<p>Each question may have zero or more answers and each question may have one or more tags indicating what the question is above.</p>
+<p>Each question may have zero or more answers and each question has one or more tags indicating what the question is above.</p>
 
 <p>Let&#39;s consider how we might lay out the rows and columns of the Stack Overflow database if we tried to do it all in one table (e.g., all in one spreadsheet), with one row per question:</p>
 
 <ul>
 <li>question id</li>
 <li>question title</li>
-<li>date</li>
-<li>viewcount</li>
+<li>question date</li>
+<li>question viewcount</li>
 <li>owner id</li>
-<li>owner_age</li>
-<li>owner_displayname</li>
-<li>answer 1 title</li>
+<li>owner age</li>
+<li>owner displayname</li>
+<li>answer 1 date</li>
 <li>&hellip;</li>
-<li>answer n title</li>
+<li>answer n date</li>
 <li>answerer 1 id</li>
 <li>&hellip;</li>
 <li>answerer n id</li>
@@ -302,9 +303,9 @@ hr {
 <ul>
 <li>question id</li>
 <li>question title</li>
-<li>date</li>
+<li>question date</li>
 <li>viewcount</li>
-<li>answer title</li>
+<li>answer date</li>
 <li>answerer id</li>
 <li>answerer name</li>
 <li>answerer age</li>
@@ -798,11 +799,7 @@ How many rows are in the result?</p>
 
 <p>Actually, there&#39;s a problem here.</p>
 
-<p><strong><em>Challenge</em></strong>: How many rows do we really want? What kinds of rows will we get that we don&#39;t want? </p>
-
-<p>A solution to that problem is:</p>
-
-<p><strong><em>Challenge</em></strong>: There&#39;s actually a further similar problem. What is the problem and how can we fix it by changing two characters in the query above? Hint, even as character strings, the creationdate column has an ordering.</p>
+<p><strong><em>Challenge</em></strong>: How many rows do we really want? What kinds of rows will we get that we don&#39;t want? How can we eliminate such rows?</p>
 
 <h2>4.3) Set operations: UNION, INTERSECT, EXCEPT</h2>
 
@@ -826,7 +823,7 @@ How many rows are in the result?</p>
 </code></pre>
 
 <pre><code>##    user  system elapsed 
-##   8.094   3.014  29.226
+##   8.199   2.876  31.482
 </code></pre>
 
 <p>Alternatively we can do a self-join. Note that the syntax gets complicated as we are doing multiple joins.</p>
@@ -845,7 +842,7 @@ How many rows are in the result?</p>
 </code></pre>
 
 <pre><code>##    user  system elapsed 
-##  15.881  14.279  47.947
+##  15.226  15.020  51.084
 </code></pre>
 
 <pre><code class="r">identical(result1, result2)
@@ -891,7 +888,11 @@ How many rows are in the result?</p>
 
 <pre><code class="r">## Try in postgreSQL, not SQLite
 result &lt;- dbGetQuery(db, &quot;select * from questions_tags where tag SIMILAR TO &#39;r-%|%-r|r|%-r-%&#39; limit 10&quot;)
+## Standard regex for &#39;any character&#39; doesn&#39;t seem to work:
+## result &lt;- dbGetQuery(db, &quot;select * from questions_tags where tag SIMILAR TO &#39;r-.*|.*-r|r|.*-r-.*&#39; limit 10&quot;)
 </code></pre>
+
+<p>Note that the matching does not find subsets, unless one uses wildcards at beginning and end of the pattern, so &ldquo;r&rdquo; will only find &ldquo;r&rdquo; and not, for example, &ldquo;dyplr&rdquo;.</p>
 
 <p>To extract substrings we use SUBSTRING. Postgres requires that the pattern to be extracted be surrounded by <code>#&quot;</code> (one could use another character in place of <code>#</code>), but for use from R we need to escape the double-quote with a backslash so it is treated as a part of the string passed to Postgres and not treated by R as indicating where the character string stops/starts. </p>
 
@@ -904,7 +905,7 @@ dbGetQuery(db, &quot;select substring(creationdate from &#39;#\&quot;[[:digit:]]
 
 <p>Here is some <a href="https://www.postgresql.org/docs/current/functions-string.html">documentation on string functions in PostgreSQL</a>.</p>
 
-<p><strong><em>Challenge</em></strong>: Select the questions that have &ldquo;java&rdquo; in their titles using regular expression syntax.</p>
+<p><strong><em>Challenge</em></strong>: Select the questions that have &ldquo;java&rdquo; but not &ldquo;javascript&rdquo; in their titles using regular expression syntax.</p>
 
 <p><strong><em>Challenge</em></strong>: Figure out how to calculate the length (in characters) of the title of each question. </p>
 
@@ -1066,68 +1067,57 @@ dbGetQuery(db, &quot;select * from questionsAugment where age &gt; 70 limit 5&qu
 
 <p><strong><em>Challenge</em></strong>: What does the following do?</p>
 
-<pre><code class="r">dbGetQuery(db, &quot;select T.tag, count(*) as n
-               from questions_tags T join
-               (select questionid from answers group by questionid
-               order by count(*) desc limit 100) most_answered
-               on T.questionid = most_answered.questionid
-               group by T.tag
-               order by n desc&quot;)
+<pre><code class="r">dbGetQuery(db, &quot;select * from questions join
+           (select *, count(*) as n_answered from answers join users 
+           on ownerid = userid group by userid)&quot;)
 </code></pre>
 
-<p>It might be hard to write that query directly from your brain. A good strategy is probably to think about creating a view that is the result of the inner query and then have the outer query use that. You can then piece together the complicated query in a modular way. For big databases, you are likely to want to submit this as a single query and not two queries so that the SQL optimizer can determine the best way to do the operations. But you want to start with code that you&#39;re confident will give you the right answer!</p>
+<p>It might be hard to write that query all at once. A good strategy is probably to think about creating a view that is the result of the inner query and then have the outer query use that. You can then piece together the complicated query in a modular way. For big databases, you are likely to want to submit this as a single query and not two queries so that the SQL optimizer can determine the best way to do the operations. But you want to start with code that you&#39;re confident will give you the right answer!</p>
 
-<p>Note we could also have done that query using a subquery in the WHERE statement. </p>
+<p>Note we could also have done that query using a subquery in the WHERE statement (discussed next). </p>
 
-<p><strong><em>Challenge</em></strong>: How would you write a query using join and group by to find the answer to each question from the user with the maximum reputation amongst all those answering the question?  Then use the result of as the subquery in a join with the questions table. The result should be the question information plus the title of the answer to that question written by the user with the highest reputation.</p>
+<p><strong><em>Challenge (hard version)</em></strong>: Write a query that returns the title of each question and answer to each question from the user with the highest reputation amongst all those answering the question. </p>
+
+<p><strong><em>Challenge (easier, step-by-step version)</em></strong>: How would you write a query using JOIN and GROUP BY to find the answer to each question from the user with the maximum reputation amongst all those answering the question?  Then use what you came up with as the subquery in a join with the questions table. The result should be the question information plus the answer to that question written by the user with the highest reputation.</p>
 
 <h3>4.7.2) Subqueries in the WHERE statement</h3>
 
 <p>Instead of a join, we can use subqueries as a way to combine information across tables, with the subquery involved in a WHERE statement. The subquery creates a set and we then can check for inclusion in (or exclusion from with <code>not in</code>) that set.</p>
 
-<p>For example, suppose we want to know the average number of UpVotes for users who have posted a question with the tag &ldquo;python&rdquo;.</p>
+<p>For example, suppose we want to know the average reputation for users who have posted a question with the tag &ldquo;python&rdquo;.</p>
 
-<pre><code class="r">dbGetQuery(db, &quot;select avg(UpVotes) from users where userid in
+<pre><code class="r">dbGetQuery(db, &quot;select avg(reputation) from users where userid in
                (select distinct ownerid from
                questions join questions_tags on questions.questionid = questions_tags.questionid
                where tag = &#39;python&#39;)&quot;)       
 </code></pre>
 
-<pre><code>##   avg(UpVotes)
-## 1      70.7917
+<pre><code>##   avg(reputation)
+## 1        484.2729
 </code></pre>
 
 <p>In some cases one can do a join rather than using a subquery, but in this example, it fails.</p>
 
-<p><strong><em>Challenge</em></strong>: What&#39;s wrong with the following query as an attempt to answer the question above? (See if you can figure it out before looking at the answer below.)</p>
+<p><strong><em>Challenge</em></strong>: What&#39;s wrong with the following query as an attempt to answer the question above? </p>
 
-<pre><code class="r">dbGetQuery(db, &quot;select avg(UpVotes) from questions, questions_tags, users
-               where questions.questionid = questions_tags.questionid and
+<pre><code class="r">dbGetQuery(db, &quot;select avg(reputation) from questions join questions_tags
+               on questions.questionid = questions_tags.questionid
+           join users on
                questions.ownerid = users.userid and
                tag = &#39;python&#39;&quot;)
 </code></pre>
 
 <p>For more details on subqueries, see the video on &ldquo;subqueries in where statements&rdquo; in this <a href="http://cs.stanford.edu/people/widom/DB-mooc.html">Introduction to Databases MOOC</a>.</p>
 
-<p>(Answer: In the subquery, we find the Ids of the users we are looking for and then average over the UpVotes of those individuals. In the join version we found all the questions that had a Python tag and averaged over the UpVotes of the individuals associated with those questions. So the latter includes multiple UpVotes values from individuals who have posted multiple Python questions.)</p>
-
-<p><strong><em>Challenge</em></strong>: Write a query that would return the users who have answered a question with the Python tag. We&#39;ve seen this challenge before, but do it now based on a subquery.</p>
-
-<p><strong><em>Challenge</em></strong>: How would you find all the answers associated with the user with the most upvotes?</p>
-
-<p><strong><em>Challenge</em></strong>: Create a frequency list of the tags used in the top 100 most answered questions. Note there is a way to do this with a JOIN and a way without a JOIN.</p>
+<p><strong><em>Challenge</em></strong>: Write a query that would return the users who have answered a question with the Python tag. We&#39;ve seen queries like this before, but do it now based on a subquery.</p>
 
 <p>Finally one can use subqueries in the SELECT clause to create new variables, but we won&#39;t go into that here.</p>
 
-<h2>4.8 Challenge questions</h2>
+<h2>4.8 Additional challenge questions</h2>
 
-<ul>
-<li>Use a subquery in the WHERE clause to count the tags used in the 100 most answered questions.</li>
-</ul>
+<p><strong><em>Challenge</em></strong>: Create a frequency list of the tags used in the top 100 most answered questions. Note there is a way to do this with a JOIN and a way without a JOIN.</p>
 
-<p><strong><em>Challenge</em></strong>: Write </p>
-
-<p>see hard questions under window functions?</p>
+<p><strong><em>Challenge</em></strong>: How would you find all the answers associated with the user with the most upvotes?</p>
 
 <h1>5) Efficient SQL queries</h1>
 
@@ -1143,21 +1133,21 @@ dbGetQuery(db, &quot;select * from questionsAugment where age &gt; 70 limit 5&qu
 </code></pre>
 
 <pre><code>##    user  system elapsed 
-##   0.385   0.384   2.454
+##   0.424   0.403   3.208
 </code></pre>
 
 <pre><code class="r">system.time(dbExecute(db, &quot;create index count_index on questions (viewcount)&quot;))  # 5.6 seconds
 </code></pre>
 
 <pre><code>##    user  system elapsed 
-##   1.837   0.671   6.659
+##   1.744   0.742   7.937
 </code></pre>
 
 <pre><code class="r">system.time(dbGetQuery(db, &quot;select * from questions where viewcount &gt; 10000&quot;))    # 0.9 seconds
 </code></pre>
 
 <pre><code>##    user  system elapsed 
-##   0.035   0.033   0.887
+##   0.035   0.037   1.129
 </code></pre>
 
 <pre><code class="r">## restore earlier state by removing index
@@ -1165,12 +1155,14 @@ system.time(dbExecute(db, &quot;drop index count_index&quot;))
 </code></pre>
 
 <pre><code>##    user  system elapsed 
-##   0.061   0.021   0.310
+##   0.062   0.020   0.345
 </code></pre>
+
+<p>One downside of indexes is that creation of indexes can be very time-consuming. And if the database is updated frequently, this could be detrimental.</p>
 
 <p>In other contexts, an index can save huge amounts of time. So if you&#39;re working with a database and speed is important, check to see if there are indexes.</p>
 
-<p>That being said, using indexes in a lookup is not always advantageous, as discussed in Section 2.6 on efficient SQL queries.</p>
+<p>That being said, using indexes in a lookup is not always advantageous, as discussed below.</p>
 
 <h3>5.1.1) How indexes work</h3>
 
@@ -1179,8 +1171,6 @@ system.time(dbExecute(db, &quot;drop index count_index&quot;))
 <p>Here&#39;s some information on how such trees are constructed and searched: <a href="http://use-the-index-luke.com/sql/anatomy/the-tree">http://use-the-index-luke.com/sql/anatomy/the-tree</a></p>
 
 <p>In SQLite, indexes are implemented by creating a separate index table that maps from the value to the row index in the indexed table, allowing for fast lookup of a row. </p>
-
-<p>One downside of indexes is that creation of indexes can be very time-consuming. And if the database is updated frequently, this could be detrimental. </p>
 
 <h2>5.2) Ideas for improving efficiency</h2>
 
@@ -1203,42 +1193,68 @@ system.time(dbExecute(db, &quot;drop index count_index&quot;))
 
 <h3>5.3) SQL query plans and EXPLAIN</h3>
 
-<p>You can actually examine the query plan that the system is going to use for a query using the EXPLAIN keyword. I&#39;d suggest trying this in Postgres as the output is more interpretable than SQLite.</p>
+<p>You can actually examine the query plan that the system is going to use for a query using the EXPLAIN keyword. I suggest trying this in Postgres as the output is more interpretable than SQLite.</p>
 
-<p>Now let&#39;s see what query plan is involved in a join and when using indexes. </p>
+<p>First let&#39;s see what query plan is involved in a join, comparing an inner join and a cross join.</p>
 
 <pre><code class="r">dbGetQuery(db, &quot;explain select * from questions join questions_tags on
                questions.questionid = questions_tags.questionid&quot;)
 </code></pre>
 
-<pre><code>                                                                         QUERY PLAN
-1                   Hash Join  (cost=744893.91..2085537.32 rows=39985376 width=118)
-2                     Hash Cond: (questions_tags.questionid = questions.questionid)
-3     -&gt;  Seq Scan on questions_tags  (cost=0.00..634684.76 rows=39985376 width=16)
-4                     -&gt;  Hash  (cost=365970.96..365970.96 rows=13472796 width=102)
-5         -&gt;  Seq Scan on questions  (cost=0.00..365970.96 rows=13472796 width=102)
+<pre><code>                                                                       QUERY PLAN
+1                   Hash Join  (cost=143426.44..493116.49 rows=7107842 width=133)
+2                   Hash Cond: (questions_tags.questionid = questions.questionid)
+3    -&gt;  Seq Scan on questions_tags  (cost=0.00..116595.42 rows=7107842 width=20)
+4                      -&gt;  Hash  (cost=69539.64..69539.64 rows=2456464 width=113)
+5         -&gt;  Seq Scan on questions  (cost=0.00..69539.64 rows=2456464 width=113)
+6                                                                            JIT:
+7                                                                   Functions: 10
+8   Options: Inlining false, Optimization false, Expressions true, Deforming true
 </code></pre>
+
+<pre><code class="r">dbGetQuery(db, &quot;explain select * from questions cross join questions_tags where
+               questions.questionid = questions_tags.questionid&quot;)
+</code></pre>
+
+<pre><code>                                                                       QUERY PLAN
+1                   Hash Join  (cost=143195.95..492351.62 rows=7097067 width=133)
+2                   Hash Cond: (questions_tags.questionid = questions.questionid)
+3    -&gt;  Seq Scan on questions_tags  (cost=0.00..116418.67 rows=7097067 width=20)
+4                      -&gt;  Hash  (cost=69428.31..69428.31 rows=2452531 width=113)
+5         -&gt;  Seq Scan on questions  (cost=0.00..69428.31 rows=2452531 width=113)
+6                                                                            JIT:
+7                                                                   Functions: 10
+8   Options: Inlining false, Optimization false, Expressions true, Deforming true
+</code></pre>
+
+<p>We see that the query plan indicates the two queries are using the same steps, with comparable cost.</p>
+
+<p>Here&#39;s additional information on interpreting what you see: <a href="https://www.postgresql.org/docs/current/static/using-explain.html">https://www.postgresql.org/docs/current/static/using-explain.html</a>.</p>
+
+<p>Let&#39;s consider a join with a filter, with and without indexes.</p>
 
 <pre><code class="r">dbGetQuery(db, &quot;explain select * from questions join questions_tags on
                questions.questionid = questions_tags.questionid where tag like &#39;python&#39;&quot;)
 </code></pre>
 
-<pre><code>                                                                                                QUERY PLAN
-1                                                 Gather  (cost=15339.05..899172.92 rows=687748 width=118)
-2                                                                                       Workers Planned: 2
-3                                        -&gt;  Nested Loop  (cost=14339.05..829398.12 rows=286562 width=118)
-4         -&gt;  Parallel Bitmap Heap Scan on questions_tags  (cost=14338.61..252751.63 rows=286562 width=16)
-5                                                                          Filter: (tag ~~ &#39;python&#39;::text)
-6               -&gt;  Bitmap Index Scan on questions_tags_tag_idx  (cost=0.00..14166.68 rows=687748 width=0)
-7                                                                       Index Cond: (tag = &#39;python&#39;::text)
-8                     -&gt;  Index Scan using questions_pkey on questions  (cost=0.43..2.01 rows=1 width=102)
-9                                                     Index Cond: (questionid = questions_tags.questionid)
+<pre><code>                                                                                         QUERY PLAN
+1                                           Gather  (cost=81480.95..148717.61 rows=85695 width=133)
+2                                                                                Workers Planned: 2
+3                           -&gt;  Parallel Hash Join  (cost=80480.95..139148.11 rows=35706 width=133)
+4                                     Hash Cond: (questions.questionid = questions_tags.questionid)
+5                   -&gt;  Parallel Seq Scan on questions  (cost=0.00..53554.26 rows=992826 width=113)
+6                                  -&gt;  Parallel Hash  (cost=80034.62..80034.62 rows=35706 width=20)
+7                -&gt;  Parallel Seq Scan on questions_tags  (cost=0.00..80034.62 rows=35706 width=20)
+8                                                                   Filter: (tag ~~ &#39;python&#39;::text)
+9                                                                                              JIT:
+10                                                                                    Functions: 12
+11                    Options: Inlining false, Optimization false, Expressions true, Deforming true
 </code></pre>
 
 <pre><code class="r">system.time(dbExecute(db, &quot;create index qid_index on questions (questionid)&quot;))  # 5.6 seconds
 system.time(dbExecute(db, &quot;create index tid_index on questions_tags (questionid)&quot;))  # 5.6 seconds
 dbGetQuery(db, &quot;explain select * from questions join questions_tags on
-               questions.questionid = questions_tags.questionid&quot;)
+               questions.questionid = questions_tags.questionid where tag like &#39;python&#39;&quot;)
 </code></pre>
 
 <pre><code>                                                                         QUERY PLAN
@@ -1249,13 +1265,9 @@ dbGetQuery(db, &quot;explain select * from questions join questions_tags on
 5         -&gt;  Seq Scan on questions  (cost=0.00..365970.96 rows=13472796 width=102)
 </code></pre>
 
-<p>The &ldquo;Workers Planned: 2&rdquo; seems to indicate that there will be some parallelization used, even without us asking for that.</p>
-
-<p>Here&#39;s additional information on interpreting what you see: <a href="https://www.postgresql.org/docs/current/static/using-explain.html">https://www.postgresql.org/docs/current/static/using-explain.html</a>.</p>
-
 <p>The main thing to look for is to see if the query will be done by using an index or by sequential scan (i.e., looking at all the rows). </p>
 
-<p>Let&#39;s compare the query plan for doing a set operation versus a join.</p>
+<p>Let&#39;s compare the query plan for doing a set operation versus a join. This is the problem where we determined which users had asked a question about R and a question about Python.</p>
 
 <pre><code class="r">## Set operation
 dbGetQuery(db, &quot;explain select displayname, userid from
@@ -1280,12 +1292,6 @@ dbGetQuery(db, &quot;explain select displayname, userid from
                join users on Q1.ownerid = users.userid
                where T1.tag = &#39;r&#39; and T2.tag = &#39;python&#39;&quot;)
 </code></pre>
-
-<ul>
-<li>inner join versus cross join with where</li>
-<li>filter w/ and w/o index</li>
-<li>join versus intersect (see example in set operations section)</li>
-</ul>
 
 <h3>5.3.1) Index lookup vs. sequential scan</h3>
 
@@ -1319,7 +1325,7 @@ dbGetQuery(db, &quot;explain select displayname, userid from
 
 <p>To speed up your work, one might try to split up one&#39;s queries into multiple queries that you run in parallel. However, you&#39;re likely to have problems with parallel queries from a single R or Python session.</p>
 
-<p>However, multiple queries to the same database from separate R or Python sessions will generally run fine but can compete for access to disk/memory. That said, in some basic experiments, the slowdown was moderate, so one may be able to parallelize across processes in a manual fashion.</p>
+<p>However, multiple queries to the same database from separate R or Python sessions will generally run fine but can compete for access to disk/memory. That said, in some basic experiments I&#39;ve done, the slowdown was moderate, so one may be able to parallelize across processes in a manual fashion.</p>
 
 <p>As of version 9.6 of Postgres, there is some capability for doing parallel queries: 
 <a href="https://www.postgresql.org/docs/current/static/parallel-query.html">https://www.postgresql.org/docs/current/static/parallel-query.html</a>.</p>
@@ -1340,6 +1346,8 @@ dbGetQuery(db, &quot;explain select displayname, userid from
 </ul>
 
 <p>The syntax is a bit involved, so let&#39;s see with a range of examples:</p>
+
+<p>(Note that there are missing ownerids for some of the questions and answers, which makes some of the grouping by ownerid here a bit odd.)</p>
 
 <ul>
 <li>Aggregate within groups but with one output value per input row</li>
@@ -1450,15 +1458,20 @@ dbGetQuery(db, &quot;select ownerid, creationdate,
                 lag(creationdate, 1) over
                 (partition by ownerid order by creationdate)
                 as previous_date
-                from questions order by ownerid desc limit 5&quot;)
+                from questions order by ownerid desc, creationdate limit 10&quot;)
 </code></pre>
 
-<pre><code>##   ownerid        creationdate       previous_date
-## 1 7693696 2016-11-27 05:23:07                &lt;NA&gt;
-## 2 7693696 2016-11-29 12:53:25 2016-11-27 05:23:07
-## 3 7691703 2016-09-05 09:30:49                &lt;NA&gt;
-## 4 7691703 2016-09-16 10:31:49 2016-09-05 09:30:49
-## 5 7689389 2016-10-05 11:50:10                &lt;NA&gt;
+<pre><code>##    ownerid        creationdate       previous_date
+## 1  7693696 2016-11-27 05:23:07                &lt;NA&gt;
+## 2  7693696 2016-11-29 12:53:25 2016-11-27 05:23:07
+## 3  7691703 2016-09-05 09:30:49                &lt;NA&gt;
+## 4  7691703 2016-09-16 10:31:49 2016-09-05 09:30:49
+## 5  7689389 2016-10-05 11:50:10                &lt;NA&gt;
+## 6  7674042 2016-03-21 11:11:37                &lt;NA&gt;
+## 7  7669738 2016-12-23 12:16:10                &lt;NA&gt;
+## 8  7661924 2016-12-14 12:18:45                &lt;NA&gt;
+## 9  7660866 2016-10-07 05:08:09                &lt;NA&gt;
+## 10 7660165 2016-07-09 22:32:49                &lt;NA&gt;
 </code></pre>
 
 <p>So one could now calculate the difference between the previous and current date to analyze the time gaps between users posting questions.</p>
@@ -1514,17 +1527,68 @@ that are within 5 Julian days (based on &#39;creationdate&#39;) of each row. </p
 
 <p>So one could now analyze bursts of activity.</p>
 
-<p>One can also choose a fixed number of rows by replacing &#39;range&#39; with &#39;rows&#39;. The ROWS and RANGE syntax allow one to specify the <em>window frame</em> in more flexible ways than simply the categories of a categorical variable.</p>
+<p>One can also choose a fixed number of rows by replacing &#39;range&#39; with &#39;rows&#39;.</p>
+
+<pre><code class="r">## Summarize questions within 5 days of current question 
+dbGetQuery(db, &quot;select ownerid, creationdate,
+                count() over
+                (partition by ownerid order by julianday(creationdate)
+                rows between 5 preceding and 5 following)
+                as n_window
+                from questions where ownerid is not null limit 30&quot;)
+</code></pre>
+
+<pre><code>##    ownerid        creationdate n_window
+## 1       13 2016-12-13 06:09:50        1
+## 2       25 2016-02-18 05:31:01        1
+## 3       33 2016-03-23 11:39:08        4
+## 4       33 2016-08-05 15:32:30        4
+## 5       33 2016-08-27 08:01:24        4
+## 6       33 2016-10-10 12:50:36        4
+## 7       56 2016-05-11 09:40:11        3
+## 8       56 2016-05-13 13:44:03        3
+## 9       56 2016-09-14 14:13:19        3
+## 10      62 2016-06-09 17:16:10        3
+## 11      62 2016-09-10 02:31:17        3
+## 12      62 2016-12-31 01:21:24        3
+## 13      67 2016-08-01 12:51:13        1
+## 14      70 2016-04-07 14:16:07        1
+## 15      71 2016-01-18 22:54:07        1
+## 16      76 2016-09-15 20:28:54        1
+## 17      91 2016-01-11 21:27:56        2
+## 18      91 2016-12-28 15:13:48        2
+## 19      95 2016-04-19 10:19:09        1
+## 20     105 2016-03-22 18:08:52        1
+## 21     112 2016-10-02 05:20:24        2
+## 22     112 2016-10-11 03:44:41        2
+## 23     113 2016-12-20 22:25:21        1
+## 24     115 2016-12-29 20:59:24        1
+## 25     116 2016-01-05 17:14:47        6
+## 26     116 2016-01-12 00:54:30        7
+## 27     116 2016-01-22 21:06:24        8
+## 28     116 2016-01-26 17:32:31        9
+## 29     116 2016-01-27 06:52:11       10
+## 30     116 2016-01-27 17:59:30       11
+</code></pre>
+
+<p>Let&#39;s discuss why <code>n_window</code> is not always 11.</p>
+
+<p>The ROWS and RANGE syntax allow one to specify the <em>window frame</em> in more flexible ways than simply the categories of a categorical variable.</p>
 
 <p>So the syntax of a window function will generally have these elements:</p>
 
 <ul>
 <li>a call to some function</li>
 <li>OVER</li>
+<li>some window:
+
+<ul>
 <li>PARTITION BY (optional)</li>
 <li>ORDER BY (optional)</li>
 <li>RANGE or ROW (optional)</li>
+</ul></li>
 <li>AS (optional)</li>
+<li>FROM</li>
 </ul>
 
 <p>You can also name window functions, which comes in handy if you want multiple functions applied to the same window:</p>
@@ -1537,25 +1601,13 @@ that are within 5 Julian days (based on &#39;creationdate&#39;) of each row. </p
                 order by ownerid limit 5&quot;)
 </code></pre>
 
-<pre><code>##   ownerid        creationdate                lag1
-## 1      13 2016-12-13 06:09:50                &lt;NA&gt;
-## 2      25 2016-02-18 05:31:01                &lt;NA&gt;
-## 3      33 2016-03-23 11:39:08                &lt;NA&gt;
-## 4      33 2016-08-05 15:32:30 2016-03-23 11:39:08
-## 5      33 2016-08-27 08:01:24 2016-08-05 15:32:30
-##                  lag2
-## 1                &lt;NA&gt;
-## 2                &lt;NA&gt;
-## 3                &lt;NA&gt;
-## 4                &lt;NA&gt;
-## 5 2016-03-23 11:39:08
-</code></pre>
-
 <p>What does that query do?</p>
 
 <p><strong><em>Challenge</em></strong>: Use a window function to compute the average viewcount for each ownerid for the 10 questions preceding each question.</p>
 
-<h2>6.1) Putting it all together to do complicated queries</h2>
+<p><strong><em>Challenge (hard)</em></strong>: Find the users who have asked one question that is highly-viewed (viewcount &gt; 1000) with their remaining questions not highly-viewed (viewcount &lt; 20).</p>
+
+<h1>7) Putting it all together to do complicated queries</h1>
 
 <p>Here are some real-world style questions one might try to create queries to answer. The context would be if you have data on user sessions on a website or data on messages between users. </p>
 
@@ -1564,11 +1616,9 @@ that are within 5 Julian days (based on &#39;creationdate&#39;) of each row. </p
 <pre><code>date | session_id | user_id | session_time
 </code></pre>
 
-<p>calculate the distribution of the average daily
-total session time in the last month. I.e., you want to get each user&#39;s daily average and then find the distribution over users. The output should be something
-like:</p>
+<p>calculate the distribution of the average daily total session time in the last month. I.e., you want to get each user&#39;s daily average and then find the distribution over users. The output should be something like:</p>
 
-<pre><code>minutes_per_day&#39; | number_of_users
+<pre><code>minutes_per_day | number_of_users
 </code></pre>
 
 <p>2) Consider a table of messages of the form</p>
@@ -1593,15 +1643,19 @@ was sent on web or mobile:</p>
 <p>What is the average (over users) in the average number of messages sent per day for each test group
 if you look at the users who have sent messages only on mobile in the last month.</p>
 
-<h1>7) Database management and command-line operation</h1>
+<h1>8) Database management and command-line operation</h1>
 
 <p>We&#39;ll illustrate some basic database management using a different example dataset. This is some data on webtraffic to Wikipedia pages. Note that the input file used here involved some pre-processing relative to the data you get the directly from the Wikistats dataset available through Amazon Web Services (AWS) because in the data posted on AWS, the datetime information is part of the filename.</p>
 
-<h2>7.1) SQLite</h2>
+<p>You&#39;ll need to get <a href="http://www.stat.berkeley.edu/share/paciorek/tutorial-wikistats-data.zip">this file</a>, which contains the input data files.</p>
+
+<h2>8.1) SQLite</h2>
 
 <h4>Setting up a database and using the SQLite command line</h4>
 
 <p>With SQLite you don&#39;t need to deal with all the permissions and administrative overhead because an SQLite database is simply a file that you can access without a password or connecting to a database server process.</p>
+
+<p>We&#39;ll demonstrate the creation of a database using data on Wikipedia traffic, stored in flat text files. </p>
 
 <p>To start the SQLite interpreter in Linux, either operating on or creating a database named <code>wikistats.db</code>:</p>
 
@@ -1615,7 +1669,7 @@ if you look at the users who have sent messages only on mobile in the last month
 .quit
 </code></pre>
 
-<h3>7.1.1) Populating a table</h3>
+<h3>8.1.1) Populating a table</h3>
 
 <p>Here&#39;s an example of reading from multiple files into SQLite using the command line.
 We create a file <code>import.sql</code> that has the configuration for the import:</p>
@@ -1632,7 +1686,7 @@ We create a file <code>import.sql</code> that has the configuration for the impo
 done
 </code></pre>
 
-<h3>7.1.2) Data cleaning</h3>
+<h3>8.1.2) Data cleaning</h3>
 
 <p>The problem in this example with importing into SQLite is the presence of double quote (&ldquo;) characters that are not meant to delineate strings but are actually part of a field. In this case probably the easiest thing is simply to strip out those quotes from UNIX. Here we use <code>sed</code> to search and replace to create versions of the input files that don&#39;t have the quotes.</p>
 
@@ -1643,21 +1697,15 @@ done
 
 <p>If you want to read the data into SQLite yourself, you <em>will</em> need to do something about the quotes; I haven&#39;t stripped them out of the files.</p>
 
-<h2>7.2) PostgreSQL</h2>
+<h2>8.2) PostgreSQL</h2>
 
-<ul>
-<li>create db on scf or in container</li>
-<li>show access to db from another machine</li>
-<li>show port forwarding?</li>
-</ul>
-
-<h3>7.2.1) Setting up a database and using the Postgres command line</h3>
+<h3>8.2.1) Setting up a database and using the Postgres command line</h3>
 
 <p>First make sure Postgres is installed on your machine.</p>
 
-<p>On Ubuntu, you can install Postgres easily via <code>apt-get</code>:</p>
+<p>On Ubuntu (or Debian) Linux, you can install Postgres easily via <code>apt-get</code>:</p>
 
-<pre><code>sudo apt-get install postgresql postgresql-contrib
+<pre><code>sudo apt-get install -y postgresql postgresql-contrib
 </code></pre>
 
 <p>Next we&#39;ll see how to set up a database. You&#39;ll generally need to operate as the <code>postgres</code> user for these sorts of manipulations. Of course if you&#39;re just a user accessing an existing database and existing tables, you don&#39;t need to worry about this.</p>
@@ -1667,8 +1715,6 @@ psql  # start postgres interpreter
 </code></pre>
 
 <p>Now from within the Postgres interpreter, you can create a database, tables within the database, and authenticate users to do things with those tables. </p>
-
-<p>In this case we&#39;ll be explicit about where on the disk filesystem the database is stored, but you probably only need to worry about this if you are creating a large database. </p>
 
 <pre><code>create database wikistats;
 create user paciorek with password &#39;test&#39;;
@@ -1698,7 +1744,7 @@ create user paciorek with password &#39;test&#39;;
 grant all privileges on database wikistats to paciorek;
 </code></pre>
 
-<h3>7.2.2) Populating a table</h3>
+<h3>8.2.2) Populating a table</h3>
 
 <p>Here&#39;s an example of importing a single file into Postgres from within the psql interpreter running as the special postgres user. In this case we have space-delimited text files. You can obtain the file <code>part-00000</code> as discussed in the introduction (you&#39;ll need to run <code>gunzip part-00000.gz</code> first).</p>
 
@@ -1729,13 +1775,13 @@ done
 
 <p>Using <code>\copy</code> as above invokes the psql <code>copy</code> command (<code>copy</code> would invoke the standard SQL <code>copy</code> command), which allows one to operate as a regular user and to use relative paths. In turn <code>\copy</code> invokes <code>copy</code> in a specific way. </p>
 
-<h3>7.2.3) Data cleaning</h3>
+<h3>8.2.3) Data cleaning</h3>
 
 <p>One complication is that often the input files will have anomalies in them. Examples include missing columns for some rows, individual elements in a column that are not of the correct type (e.g., a string in a numeric column), and characters that can&#39;t be handled. In the Wikistats data case, one issue was lines without the full set of columns and another was the presence of a backslash character at the end of the text for a column.</p>
 
 <p>With large amounts of data or many files, this can be a hassle to deal with. UNIX shell commands can sometimes be quite helpful, including use of sed and awk. Or one might preprocess files in chunks using Python. </p>
 
-<p>For example the following shell scripting loop over Wikistats files ensures each row has 6 fields/columns by pulling out only rows with the full set of columns. I used this to process the input files before copying into Postgres as done above. Actually there was even more preprocessing because in the form of the data available from Amazon&#39;s storage service, the date/time information was part of the filename and not part of the data files. </p>
+<p>For example the following shell scripting loop over Wikistats files ensures each row has 6 fields/columns by pulling out only rows with the full set of columns. I used this to process the input files before copying into Postgres as done above. </p>
 
 <pre><code class="bash">for file in $(ls *gz); do
     gzip -cd $file | grep &quot;^.* .* .* .* .* .*$&quot; | gzip -c &gt; ../wikistats-fulllines/$file
@@ -1744,7 +1790,9 @@ done
 
 <p>Note that this restriction to rows with a full set of fields has already been done in the data files I provide to you.</p>
 
-<h1>8) References</h1>
+<p>Actually there was even more preprocessing because in the form of the data available from Amazon&#39;s storage service, the date/time information was part of the filename and not part of the data files. </p>
+
+<h1>9) References</h1>
 
 <p>In addition to various material found online, including various software manuals and vignettes, much of the SQL material was based on the following two sources:</p>
 
