@@ -9,6 +9,7 @@ Chris Paciorek, Department of Statistics, UC Berkeley
 options(replace.assign=TRUE, width=65)
 opts_chunk$set(eval = FALSE, message = FALSE) ## turned off message() output
 library(knitr)
+read_chunk('examples.R')
 library(DBI)
 SLOWEVAL <- TRUE
 ```
@@ -380,30 +381,25 @@ dbWriteTable(conn = db, name = "student", value = student, row.names = FALSE, ap
 
 Let's see an example of building up a (somewhat) more complicated query in pieces, using the tools discussed above.
 
-1) First suppose we want to find the number of users who have asked questions.
+1. First suppose we want to find the number of users who have asked questions.
 
 ```{r, eval=FALSE, echo=FALSE}
-dbGetQuery(db, "select count(*) from questions")
-dbGetQuery(db, "select count(distinct ownerid) from questions")
+
 ```
 
-2) How about finding the users who have asked at least 50 questions? How do we determine the number of questions per user? What are we grouping by?
+2. How about finding the users who have asked at least 50 questions? How do we determine the number of questions per user? What are we grouping by?
 
 ```{r, eval=FALSE, echo=FALSE}
-dbGetQuery(db, "select count(*) from questions group by ownerid")
-dbGetQuery(db, "select ownerid, count(*) from questions group by ownerid")
-dbGetQuery(db, "select ownerid, count(*) as n from questions group by ownerid having n >= 50 order by n")
+
 ```
 
-3) What if we wanted actual information about the users, not just their ID? We need information from the users table.
+3. What if we wanted actual information about the users, not just their ID? We need information from the users table.
 
 ```{r, eval=FALSE, echo=FALSE}
-dbGetQuery(db, "select ownerid, count(*) as n from questions join users on
-               questions.ownerid = users.userid
-               group by ownerid having n >= 50 order by n")
+
 ```
 
-4) What if we wanted to count the number of users who have asked at least 50 questions? We'll discuss one way to do this later.
+4. ***Challenge***: What if we wanted to count the number of users who have asked at least 50 questions? We'll discuss one way to do this later.
 
 # 4) More advanced SQL
 
@@ -442,21 +438,23 @@ In general, inner joins can be seen as a form of cross join followed by a condit
 
 ```
 select * from table1 join table2 on table1.id = table2.id ## explicit inner join
-select * from table1, table2 where table1.id = table2.id  ## without explicit JOIN
-select * from table1 cross join table2 where table1.id = table2.id 
-select * from table1 join table2 using(id)
-select * from table1 natural join table2
+select * from table1, table2 where table1.id = table2.id  ## without explicit (cross join)
+select * from table1 cross join table2 where table1.id = table2.id  ## explicit cross join
+select * from table1 join table2 using(id)                ## inner join again
+select * from table1 natural join table2                  ## natural (inner) join
 ```
 
 Note that in the last query the join would be based on all common columns, which could be a bit dangerous if you don't look carefully at the schema of both tables. Assuming `id` is the common column, then the last of these queries is the same as the others.
 
-***Challenge***:  Suppose the Stack Overflow database has 10,000 questions and 30,000 answers.
+***Challenge***:  Suppose the Stack Overflow database has 10,000 questions, 30,000 answers, and 5,000 users. Please answer in the Zoom poll.
 
-1) If you do an inner join of questions and answers, how many rows would the result have?
-2) If you do a left outer join of questions and answers, how many rows would the result have?
-3) If you do a right outer join of questions and answers, how many rows would the result have?
-4) If you do a right outer join of questions and *users*, how many rows would the result have?
-5) If you do a cross join of questions and answers, how many rows would the result have?
+1. If you do an inner join of questions and answers, how many rows would the result have?
+2. If you do a left outer join of questions and answers, how many rows would the result have?
+3. If you do a right outer join of questions and answers, how many rows would the result have?
+4. If you do a right outer join of questions and *users*, how many rows would the result have?
+5. If you do a cross join of questions and answers, how many rows would the result have?
+
+***Challenge***: What question would item #4 allow you to figure out?
 
 ## 4.2) Joining a table with itself (self joins)
 
@@ -479,13 +477,9 @@ Actually, there's a problem here.
 
 ***Challenge***: How many rows do we really want? What kinds of rows will we get that we don't want? 
 
-A solution to that problem of having the same question paired with itself is:
+A solution to that problem is:
 
-```{r, eval=FALSE}
-dbGetQuery(db, "create view question_contrasts as
-               select * from questions Q1 join questions Q2
-               on Q1.ownerid = Q2.ownerid
-               where Q1.creationdate != Q2.creationdate")
+```{r, selfjoin, eval=FALSE, echo=FALSE}
 ```
 
 ***Challenge***: There's actually a further similar problem. What is the problem and how can we fix it by changing two characters in the query above? Hint, even as character strings, the creationdate column has an ordering.
@@ -542,34 +536,43 @@ Which is faster? The second one looks more involved in terms of the joins, so th
 
 Or we could use UNION or EXCEPT to find people who have asked either or only one type of question, respectively.
 
-***Challenge***: Find all the questions about either R or Python
+***Challenge***: Find all the questions about either R or Python.
 
 ## 4.4) String processing and creating new fields
+
+We can do some basic matching with LIKE, using % as a wildcard and _ to stand in for any single character:
+
+```{r, eval=TRUE}
+dbGetQuery(db, "select * from questions_tags where tag like 'r-%' limit 10")
+```
 
 In Postgres, in addition the basic use of LIKE to match character strings, one can regular expression syntax with SIMILAR TO and one can extract substrings with SUBSTRING.
 
 These keywords are not available in SQLite so the following can only be done in the Postgres instance of our example database. Here we'll look for all tags that are of the form "r-", "-r", "r" or "-r-". SQL uses % as a wildcard (this is not standard regular expression syntax). 
 
+
 ```{r, eval=FALSE}
-dbGetQuery(db, "select * from tags where tag SIMILAR TO 'r-%|%-r|r|%-r-%'")
+## Try in postgreSQL, not SQLite
+result <- dbGetQuery(db, "select * from questions_tags where tag SIMILAR TO 'r-%|%-r|r|%-r-%' limit 10")
 ```
 
 To extract substrings we use SUBSTRING. Postgres requires that the pattern to be extracted be surrounded by `#"` (one could use another character in place of `#`), but for use from R we need to escape the double-quote with a backslash so it is treated as a part of the string passed to Postgres and not treated by R as indicating where the character string stops/starts. 
 
 ```{r, eval=FALSE}
+## Try in postgreSQL, not SQLite
 dbGetQuery(db, "select substring(creationdate from '#\"[[:digit:]]{4}#\"%' for '#') as year
-               from questions limit 3")
+               from questions limit 10")
 ```
 
 Note that SQLite provides SUBSTR for substrings, but the flexibility of SUBSTR seems to be much less than use of SUBSTRING in PostgreSQL.
 
 Here is some [documentation on string functions in PostgreSQL](https://www.postgresql.org/docs/current/functions-string.html).
 
-***Challenge***: Select the questions that have "java" in their titles using regular expression syntax (TODO: NEED TO TRY THIS)
+***Challenge***: Select the questions that have "java" in their titles using regular expression syntax.
 
 ***Challenge***: Figure out how to calculate the length (in characters) of the title of each question. 
 
-***Challenge***:Process the creationdate field to create year, day, and month fields in a new view. Note that this would be good practice for string manipulation but you would want to handle dates and times using the material in the next section and not use string processing.
+***Challenge***:Process the creationdate field to create year, day, and month fields in a new view. Note that this would be good practice for string manipulation, but you would want to handle dates and times using the material in the next section and not use string processing.
 
 ## 4.5) Dates and times
 
@@ -636,15 +639,12 @@ dbExecute(db, "create view questionsAugment as
 ## don't be confused by the "0" response --
 ## it just means that nothing is returned to R; the view _has_ been created
                
-dbGetQuery(db, "select * from questionsAugment where age < 15 limit 5")
+dbGetQuery(db, "select * from questionsAugment where age > 70 limit 5")
 ```
                
-One use of a view would be to create a mega table that stores all the information from multiple tables in the (unnormalized) form you might have if you simply had one data frame in R or Python.
-
 ```{r, eval=TRUE, include=FALSE}
 dbExecute(db, "drop view questionsAugment") # drop so can create again when rerun the code above
 ```
-
 
 ## 4.7) Subqueries
 
@@ -665,14 +665,12 @@ dbGetQuery(db, "select T.tag, count(*) as n
                order by n desc")
 ```
 
-It might be hard to just come up with that. A good strategy is probably to think about creating a view that is the result of the inner query and then have the outer query use that. You can then piece together the complicated query in a modular way. For big databases, you are likely to want to submit this as a single query and not two queries so that the SQL optimizer can determine the best way to do the operations. But you want to start with code that you're confident will give you the right answer!
-
+It might be hard to write that query directly from your brain. A good strategy is probably to think about creating a view that is the result of the inner query and then have the outer query use that. You can then piece together the complicated query in a modular way. For big databases, you are likely to want to submit this as a single query and not two queries so that the SQL optimizer can determine the best way to do the operations. But you want to start with code that you're confident will give you the right answer!
 
 Note we could also have done that query using a subquery in the WHERE statement. 
 
-***Challenge***: Write a query that, for each question, will return the question title, number of answers, and the answer to that question written by the user with the highest reputation.
+***Challenge***: How would you write a query using join and group by to find the answer to each question from the user with the maximum reputation amongst all those answering the question?  Then use the result of as the subquery in a join with the questions table. The result should be the question information plus the title of the answer to that question written by the user with the highest reputation.
 
-Finally one can use subqueries in the SELECT clause to create new variables, but we won't go into that here.
 
 
 ### 4.7.2) Subqueries in the WHERE statement
@@ -706,12 +704,18 @@ For more details on subqueries, see the video on "subqueries in where statements
 
 ***Challenge***: Write a query that would return the users who have answered a question with the Python tag. We've seen this challenge before, but do it now based on a subquery.
 
-
 ***Challenge***: How would you find all the answers associated with the user with the most upvotes?
 
 ***Challenge***: Create a frequency list of the tags used in the top 100 most answered questions. Note there is a way to do this with a JOIN and a way without a JOIN.
 
+Finally one can use subqueries in the SELECT clause to create new variables, but we won't go into that here.
+
 ## 4.8 Challenge questions
+
+- Use a subquery in the WHERE clause to count the tags used in the 100 most answered questions.
+
+***Challenge***: Write 
+
 
 see hard questions under window functions?
 
