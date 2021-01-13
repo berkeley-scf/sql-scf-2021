@@ -476,14 +476,7 @@ How many rows are in the result?
 
 Actually, there's a problem here.
 
-***Challenge***: How many rows do we really want? What kinds of rows will we get that we don't want? 
-
-A solution to that problem is:
-
-```{r, selfjoin, eval=FALSE, echo=FALSE}
-```
-
-***Challenge***: There's actually a further similar problem. What is the problem and how can we fix it by changing two characters in the query above? Hint, even as character strings, the creationdate column has an ordering.
+***Challenge***: How many rows do we really want? What kinds of rows will we get that we don't want? How can we eliminate such rows?
 
 
 ## 4.3) Set operations: UNION, INTERSECT, EXCEPT
@@ -725,9 +718,11 @@ system.time(dbGetQuery(db, "select * from questions where viewcount > 10000"))  
 system.time(dbExecute(db, "drop index count_index"))
 ```
 
+One downside of indexes is that creation of indexes can be very time-consuming. And if the database is updated frequently, this could be detrimental.
+
 In other contexts, an index can save huge amounts of time. So if you're working with a database and speed is important, check to see if there are indexes.
 
-That being said, using indexes in a lookup is not always advantageous, as discussed in Section 2.6 on efficient SQL queries.
+That being said, using indexes in a lookup is not always advantageous, as discussed below.
 
 ### 5.1.1) How indexes work
 
@@ -737,7 +732,6 @@ Here's some information on how such trees are constructed and searched: http://u
 
 In SQLite, indexes are implemented by creating a separate index table that maps from the value to the row index in the indexed table, allowing for fast lookup of a row. 
 
-One downside of indexes is that creation of indexes can be very time-consuming. And if the database is updated frequently, this could be detrimental. 
 
 ## 5.2) Ideas for improving efficiency
 
@@ -755,9 +749,7 @@ Some tips for faster queries include:
 
 ### 5.3) SQL query plans and EXPLAIN
 
-You can actually examine the query plan that the system is going to use for a query using the EXPLAIN keyword. I'd suggest trying this in Postgres as the output is more interpretable than SQLite.
-
-
+You can actually examine the query plan that the system is going to use for a query using the EXPLAIN keyword. I suggest trying this in Postgres as the output is more interpretable than SQLite.
 
 
 Now let's see what query plan is involved in a join and when using indexes. 
@@ -879,7 +871,7 @@ Given this, it generally won't be helpful to force your database to reside in me
 
 To speed up your work, one might try to split up one's queries into multiple queries that you run in parallel. However, you're likely to have problems with parallel queries from a single R or Python session.
 
-However, multiple queries to the same database from separate R or Python sessions will generally run fine but can compete for access to disk/memory. That said, in some basic experiments, the slowdown was moderate, so one may be able to parallelize across processes in a manual fashion.
+However, multiple queries to the same database from separate R or Python sessions will generally run fine but can compete for access to disk/memory. That said, in some basic experiments I've done, the slowdown was moderate, so one may be able to parallelize across processes in a manual fashion.
 
 As of version 9.6 of Postgres, there is some capability for doing parallel queries: 
 [https://www.postgresql.org/docs/current/static/parallel-query.html](https://www.postgresql.org/docs/current/static/parallel-query.html).
@@ -1018,6 +1010,8 @@ We'll illustrate some basic database management using a different example datase
 #### Setting up a database and using the SQLite command line
 
 With SQLite you don't need to deal with all the permissions and administrative overhead because an SQLite database is simply a file that you can access without a password or connecting to a database server process.
+
+We'll demonstrate the creation of a database using data on Wikipedia traffic, stored in flat text files. 
 
 To start the SQLite interpreter in Linux, either operating on or creating a database named `wikistats.db`:
 

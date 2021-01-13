@@ -13,11 +13,12 @@
 docker run --rm -p 63333:5432 -ti  rocker/r-base /bin/bash
 
 ## install Postgres and SSH/SCP (the latter for copying files into the container)
-apt-get install postgresql postgresql-contrib libpq-dev
-apt-get install openssh-client
+apt-get update
+apt-get install -y postgresql postgresql-contrib libpq-dev
+apt-get install -y openssh-client
 
 ## If you want to be able to connect to postgres from outside the container, do these steps:
-PG_VER=10  # modify as needed
+PG_VER=13  # modify as needed
 echo -e "host\tall\t\tall\t\t0.0.0.0/0\t\tmd5" >> /etc/postgresql/${PG_VER}/main/pg_hba.conf
 sed -i "s/#listen_addresses = 'localhost'/listen_addresses = '*'/" /etc/postgresql/${PG_VER}/main/postgresql.conf
 
