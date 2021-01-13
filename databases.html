@@ -214,17 +214,19 @@ hr {
 
 <p>This workshop will cover using and administering databases (SQLite and PostgreSQL) and making SQL queries of various complexity (from R and Python).</p>
 
-<p>I&#39;ll do a bunch of demo with time for you to work on individual questions as well as a slightly more extended breakout for an extended problem.</p>
+<p>I&#39;ll do a bunch of demo with time for you to work on individual questions as well as time to compare and contrast different people&#39;s answers.</p>
 
-<p>This workshop is based on <a href="https://github.com/berkeley-scf/tutorial-databases">this SCF tutorial</a>.</p>
+<p>This workshop is based essentially completely on <a href="https://github.com/berkeley-scf/tutorial-databases">this SCF tutorial</a>.</p>
 
-<p>At times I&#39;ll ask you to post code/syntax on this shared document: <a href="https://etherpad.net/p/scf-sql-2021">https://etherpad.net/p/scf-sql-2021</a>.</p>
+<p>At times I&#39;ll ask you to post code/syntax on this <a href="https://docs.google.com/document/d/1Wnlw0NKlUzPTA7v0S704782RI3Q_gxdCamolK40qSU4/edit?usp=sharing">shared document</a>.</p>
 
 <h2>0.1) Getting set up</h2>
 
 <p>This workshop assumes you have a working knowledge of R or Python. </p>
 
-<p>The example data files are not part of the Github repository. You can get the example data files (both Stack Overflow data and Wikipedia webtraffic data for the year 2016) <a href="http://www.stat.berkeley.edu/share/paciorek/tutorial-databases-data.zip">here</a>.</p>
+<p>The example data files are not part of the Github repository. You can get the example SQLite database <a href="http://www.stat.berkeley.edu/share/paciorek/stackoverflow-2016.db">here</a>.</p>
+
+<p>You can get the input data files we&#39;ll work with when setting up an example database <a href="todo">here (UNDER CONSTRUCTION)</a>.</p>
 
 <p>Solutions to the SQL challenges are available on request. </p>
 
@@ -260,7 +262,16 @@ hr {
 
 <h3>1.3.1) Example</h3>
 
-<p>The database we&#39;ll work with as our example is meta-data on questions and answers on the Stack Overflow code discussion website from 2016. We don&#39;t have the full text of the questions or the answers, but we do have the question and answer titles, some information about how popular the questions and answers were, information about the users posting questions or answers, and the topics (tags) associated with each question. Each question may have zero or more answers and each question may have one or more tags indicating what the question is above.</p>
+<p>The database we&#39;ll work with as our example is meta-data on questions and answers on the Stack Overflow code discussion website from 2016. We don&#39;t have the full text of the questions or the answers, but we do have:</p>
+
+<ul>
+<li>the question and answer titles,</li>
+<li>some information about how popular the questions and answers were,</li>
+<li>information about the users posting questions or answers, and</li>
+<li>the topics (tags) associated with each question.</li>
+</ul>
+
+<p>Each question may have zero or more answers and each question may have one or more tags indicating what the question is above.</p>
 
 <p>Let&#39;s consider how we might lay out the rows and columns of the Stack Overflow database if we tried to do it all in one table (e.g., all in one spreadsheet), with one row per question:</p>
 
@@ -299,7 +310,7 @@ hr {
 <li>answerer age</li>
 </ul>
 
-<p>These approaches have a lot of disadvantages. Let&#39;s list them as a group:</p>
+<p><strong><em>Challenge</em></strong>: These approaches have a lot of disadvantages. Let&#39;s list them as a group:</p>
 
 <ul>
 <li>??</li>
@@ -316,8 +327,8 @@ hr {
 <p>The basic idea is to think about what tables you would create such that:</p>
 
 <ul>
-<li>each row contains unique information</li>
-<li>there is no duplication of information in some other row and</li>
+<li>each row contains unique information,</li>
+<li>there is no duplication of information in some other row, and</li>
 <li>the number of columns can be known in advance without having columns with blank entries.</li>
 </ul>
 
@@ -325,32 +336,28 @@ hr {
 
 <h3>1.3.2) Keys</h3>
 
-<p>A key is a field or collection of fields that give(s) a unique value for every row/observation. A table in a database should then have a primary key that is the main unique identifier used by the DBMS. Foreign keys are columns in one table that give the value of the primary key in another table. When information from multiple tables is joined together, the matching of a row from one table to a row in another table is generally done by equating the primary key in one table with a foreign key in a different table.</p>
+<p>A key is one (or occasionally more) fields that give a unique value for every row/observation. A table in a database should then have a primary key that is the main unique identifier used by the DBMS. Foreign keys are columns in one table that give the value of the primary key in another table. When information from multiple tables is joined together, the matching of a row from one table to a row in another table is generally done by equating the primary key in one table with a foreign key in a different table.</p>
 
 <p>The lines between tables indicate the relationship of foreign keys in one table to primary keys in another table in the <a href="normalized_example.png">schema we just saw</a>.</p>
 
-<p>In our Stack Overflow example, the primary keys would presumably be: questions.ID, answers.ID, users.ID, and for QuestionsTags table two fields: {QuestionsTags.questionID, QuestionsTags.tag}.</p>
+<p>In our Stack Overflow example, the primary keys would presumably be: questions.questionid, answers.answerid, users.userid, and for QuestionsTags table two fields: {QuestionsTags.questionid, QuestionsTags.tag}.</p>
 
 <p>Some examples of foreign keys would be:</p>
 
 <ul>
-<li>ownerID as the foreign key in Questions for joining with Users on the users primary key (ID)</li>
-<li>questionID as the foreign key in Answers for joining with Questions on the questions primary key (ID)</li>
+<li>ownerid as the foreign key in Questions for joining on the userid primary key in Users</li>
+<li>questionid as the foreign key in Answers for joining on the questionid primary key in Questions</li>
 </ul>
 
 <h1>2) Accessing a database from R or Python</h1>
 
 <h2>2.1) Getting the example database</h2>
 
-<p>I&#39;ve obtained data from <a href="https://stackoverflow.com">Stack Overflow</a>, the popular website for asking coding questions, and placed it into a normalized database (which we&#39;ll define later). The SQLite version (also in CSVs as one CSV per table) has metadata (i.e., it lacks the actual text of the questions and answers) on all of the questions and answers posted in 2016.</p>
+<p>I&#39;ve obtained data from <a href="https://stackoverflow.com">Stack Overflow</a>, the popular website for asking coding questions, and placed it into a normalized database. The SQLite version (also in CSVs as one CSV per table) has metadata (i.e., it lacks the actual text of the questions and answers) on all of the questions and answers posted in 2016.</p>
 
-<p>Now let&#39;s consider the organization of the Stack Overflow data. Each question may have multiple answers and each question may have multiple (topic) tags.</p>
+<p>You can download a copy of the SQLite version of the Stack Overflow database (only data for the year 2016) from <a href="http://www.stat.berkeley.edu/share/paciorek/stackoverflow-2016.db">here</a> as discussed in the introduction of this tutorial. </p>
 
-<p>You can download a copy of the SQLite version of the Stack Overflow database (only data for the year 2016) from <a href="http://www.stat.berkeley.edu/share/paciorek/tutorial-databases-data.zip">here</a> as part of the overall zip with all of the example datasets as discussed in the introduction of this tutorial. </p>
-
-<p>In the next section I&#39;ll assume the .db file is placed in the subdirectory of the repository called <code>data</code>.</p>
-
-<p>Note that all of the code used to download the data from the Stack Overflow website and to manipulate it to create a complete Postgres database and (for the year 2016 only) an SQLite database and CSVs for each table is in the <code>data/prep_stackoverflow</code> subdirectory of this repository. Note that as of January 2020, <a href="https://archive.org/download/stackexchange">the data are still being kept up to date online</a>.</p>
+<p>Note that all of the code used to download the data from the Stack Overflow website and to manipulate it to create a complete Postgres database and (for the year 2016 only) an SQLite database and CSVs for each table is in the <code>data/prep_stackoverflow</code> subdirectory of <a href="https://github.com/berkeley-scf/tutorial-databases">this repository</a>. Note that as of January 2020, <a href="https://archive.org/download/stackexchange">the data are still being kept up to date online</a>.</p>
 
 <p>Although DBMS have their own interfaces (we&#39;ll see a bit of this later), databases are commonly accessed from other programs. For data analysts this would often be Python or R, as seen next.</p>
 
@@ -359,7 +366,11 @@ hr {
 <h2>2.2) Using SQL from R</h2>
 
 <p>The <em>DBI</em> package provides a front-end for manipulating databases from a variety of DBMS (SQLite, MySQL, PostgreSQL, among others).
-Basically, you tell the package what DBMS is being used on the back-end, link to the actual database, and then you can use the standard functions in the package regardless of the back-end.</p>
+Basically, you</p>
+
+<p>1) tell the package what DBMS is being used on the back-end,
+2) link to the actual database, and then
+3) use the standard functions in the package <strong>regardless</strong> of the back-end.</p>
 
 <p>With SQLite, R processes make calls against the stand-alone SQLite database (.db) file, so there are no SQLite-specific processes. With PostgreSQL, R processes call out to separate Postgres processes; these are started from the overall Postgres background process</p>
 
@@ -367,7 +378,7 @@ Basically, you tell the package what DBMS is being used on the back-end, link to
 
 <pre><code class="r">library(RSQLite)
 drv &lt;- dbDriver(&quot;SQLite&quot;)
-dir &lt;- &#39;.&#39; # relative or absolute path to where the .db file is
+dir &lt;- &#39;.&#39; # relative or absolute path to where the .db file is; here just the working directory
 dbFilename &lt;- &#39;stackoverflow-2016.db&#39;
 db &lt;- dbConnect(drv, dbname = file.path(dir, dbFilename))
 dbGetQuery(db, &quot;select * from questions limit 5&quot;)  # simple query to get 5 rows from a table
@@ -445,7 +456,7 @@ identical(results, results2)
 <pre><code class="r">dbClearResult(query)  # clear to prepare for another query
 </code></pre>
 
-<p>To disconnect from the database:</p>
+<p>To disconnect from the database (you probably don&#39;t want to do this now&hellip;):</p>
 
 <pre><code class="r">dbDisconnect(db)
 </code></pre>
@@ -464,7 +475,7 @@ db &lt;- dbConnect(drv, dbname = &#39;stackoverflow&#39;, user = &#39;paciorek&#
 <p>For SQLite:</p>
 
 <pre><code class="python">import sqlite3 as sq
-dir &lt;- &#39;data&#39; # relative or absolute path to where the .db file is
+dir &lt;- &#39;.&#39; # relative or absolute path to where the .db file is
 dbFilename &lt;- &#39;stackoverflow-2016.db&#39;
 import os
 db = sq.connect(os.path.join(&#39;data&#39;, dbFilename))
@@ -624,110 +635,7 @@ identical(result1, result2)
 <p>Here&#39;s a basic example where we count the occurrences of different tags. </p>
 
 <pre><code class="r">dbGetQuery(db, &quot;select tag, count(*) as n from questions_tags
-                group by tag order by n desc limit 100&quot;)
-</code></pre>
-
-<pre><code>##                     tag      n
-## 1            javascript 290966
-## 2                  java 219155
-## 3               android 184272
-## 4                   php 177969
-## 5                python 171745
-## 6                    c# 163637
-## 7                  html 126851
-## 8                jquery 123707
-## 9                   ios  95722
-## 10                  css  86470
-## 11            angularjs  76951
-## 12                  c++  76260
-## 13                mysql  75458
-## 14                swift  61485
-## 15                  sql  58346
-## 16              node.js  52827
-## 17                    r  48079
-## 18               arrays  46739
-## 19                 json  45250
-## 20        ruby-on-rails  39036
-## 21           sql-server  37077
-## 22                    c  36080
-## 23              asp.net  35610
-## 24                excel  29924
-## 25             angular2  28832
-## 26                 ajax  27937
-## 27          objective-c  26104
-## 28               django  25737
-## 29                 ruby  25709
-## 30                linux  25693
-## 31               spring  25628
-## 32          asp.net-mvc  25288
-## 33            wordpress  25073
-## 34                regex  24867
-## 35                  xml  24260
-## 36                 .net  23642
-## 37              laravel  22017
-## 38              reactjs  21590
-## 39                  vba  21180
-## 40              mongodb  20947
-## 41           python-3.x  20589
-## 42           python-2.7  20328
-## 43             database  19936
-## 44    twitter-bootstrap  19812
-## 45                xcode  17761
-## 46              windows  17301
-## 47               string  17286
-## 48                 bash  16686
-## 49            excel-vba  16478
-## 50       android-studio  16450
-## 51                  git  16425
-## 52           postgresql  16197
-## 53                  wpf  16165
-## 54                html5  15954
-## 55                scala  15704
-## 56               pandas  15697
-## 57               vb.net  15135
-## 58       multithreading  15125
-## 59               oracle  14977
-## 60           typescript  14342
-## 61        visual-studio  14084
-## 62  amazon-web-services  13500
-## 63             firebase  13444
-## 64         apache-spark  13187
-## 65               matlab  13094
-## 66                  osx  13027
-## 67               apache  13008
-## 68              eclipse  12891
-## 69                forms  12705
-## 70                 rest  12168
-## 71                 css3  12100
-## 72                azure  11962
-## 73            algorithm  11957
-## 74                 list  11630
-## 75             selenium  11411
-## 76                image  11389
-## 77           powershell  11157
-## 78     entity-framework  11132
-## 79              cordova  11052
-## 80                  api  10980
-## 81                maven  10955
-## 82      ionic-framework  10950
-## 83            hibernate  10890
-## 84              symfony  10874
-## 85                  csv  10806
-## 86               docker  10423
-## 87                shell  10237
-## 88                   qt  10046
-## 89   visual-studio-2015   9872
-## 90              express   9650
-## 91             function   9579
-## 92          google-maps   9544
-## 93                numpy   9532
-## 94          performance   9490
-## 95            .htaccess   9411
-## 96         unit-testing   9406
-## 97          codeigniter   9388
-## 98           spring-mvc   9156
-## 99                loops   9155
-## 100              sqlite   9092
+                group by tag order by n desc limit 20&quot;)
 </code></pre>
 
 <p><strong><em>Challenge</em></strong>: What specifically does that query do? Describe the table that would be returned.</p>
@@ -784,13 +692,13 @@ dbWriteTable(conn = db, name = &quot;student&quot;, value = student, row.names =
 
 <p>Let&#39;s see an example of building up a (somewhat) more complicated query in pieces, using the tools discussed above.</p>
 
-<p>First suppose we want to find the number of users who have asked questions:</p>
+<p>1) First suppose we want to find the number of users who have asked questions.</p>
 
-<p>How about finding the users who have asked at least 50 questions? How do we determine the number of questions per user? What are we grouping by?</p>
+<p>2) How about finding the users who have asked at least 50 questions? How do we determine the number of questions per user? What are we grouping by?</p>
 
-<p>What if we wanted actual information about the users, not just their ID? We need information from the users table.</p>
+<p>3) What if we wanted actual information about the users, not just their ID? We need information from the users table.</p>
 
-<p>What if we wanted to count the number of users who have asked at least 50 questions? We&#39;ll discuss one way to do this later.</p>
+<p>4) What if we wanted to count the number of users who have asked at least 50 questions? We&#39;ll discuss one way to do this later.</p>
 
 <h1>4) More advanced SQL</h1>
 
@@ -921,7 +829,7 @@ How many rows are in the result?</p>
 </code></pre>
 
 <pre><code>##    user  system elapsed 
-##   6.606   2.268  24.347
+##   8.017   2.979  29.128
 </code></pre>
 
 <p>Alternatively we can do a self-join. Note that the syntax gets complicated as we are doing multiple joins.</p>
@@ -940,7 +848,7 @@ How many rows are in the result?</p>
 </code></pre>
 
 <pre><code>##    user  system elapsed 
-##  14.542  15.213  49.457
+##  15.426  14.433  47.445
 </code></pre>
 
 <pre><code class="r">identical(result1, result2)
@@ -1214,21 +1122,21 @@ dbGetQuery(db, &quot;select * from questionsAugment where age &lt; 15 limit 5&qu
 </code></pre>
 
 <pre><code>##    user  system elapsed 
-##   0.328   0.267   2.472
+##   0.456   0.335   2.513
 </code></pre>
 
 <pre><code class="r">system.time(dbExecute(db, &quot;create index count_index on questions (viewcount)&quot;))  # 5.6 seconds
 </code></pre>
 
 <pre><code>##    user  system elapsed 
-##   1.348   0.468   4.744
+##   1.852   0.661   6.132
 </code></pre>
 
 <pre><code class="r">system.time(dbGetQuery(db, &quot;select * from questions where viewcount &gt; 10000&quot;))    # 0.9 seconds
 </code></pre>
 
 <pre><code>##    user  system elapsed 
-##   0.025   0.013   0.862
+##   0.015   0.056   0.939
 </code></pre>
 
 <pre><code class="r">## restore earlier state by removing index
@@ -1236,7 +1144,7 @@ system.time(dbExecute(db, &quot;drop index count_index&quot;))
 </code></pre>
 
 <pre><code>##    user  system elapsed 
-##   0.052   0.013   0.251
+##   0.056   0.055   0.537
 </code></pre>
 
 <p>In other contexts, an index can save huge amounts of time. So if you&#39;re working with a database and speed is important, check to see if there are indexes.</p>
