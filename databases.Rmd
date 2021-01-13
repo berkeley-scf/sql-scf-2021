@@ -18,20 +18,21 @@ SLOWEVAL <- TRUE
 
 This workshop will cover using and administering databases (SQLite and PostgreSQL) and making SQL queries of various complexity (from R and Python).
 
-I'll do a bunch of demo with time for you to work on individual questions as well as a slightly more extended breakout for an extended problem.
+I'll do a bunch of demo with time for you to work on individual questions as well as time to compare and contrast different people's answers.
 
-This workshop is based on [this SCF tutorial](https://github.com/berkeley-scf/tutorial-databases).
+This workshop is based essentially completely on [this SCF tutorial](https://github.com/berkeley-scf/tutorial-databases).
 
-At times I'll ask you to post code/syntax on this shared document: [https://etherpad.net/p/scf-sql-2021](https://etherpad.net/p/scf-sql-2021).
+At times I'll ask you to post code/syntax on this [shared document](https://docs.google.com/document/d/1Wnlw0NKlUzPTA7v0S704782RI3Q_gxdCamolK40qSU4/edit?usp=sharing).
 
 ## 0.1) Getting set up
 
 This workshop assumes you have a working knowledge of R or Python. 
 
-The example data files are not part of the Github repository. You can get the example data files (both Stack Overflow data and Wikipedia webtraffic data for the year 2016) [here](http://www.stat.berkeley.edu/share/paciorek/tutorial-databases-data.zip).
+The example data files are not part of the Github repository. You can get the example SQLite database [here](http://www.stat.berkeley.edu/share/paciorek/stackoverflow-2016.db).
+
+You can get the input data files we'll work with when setting up an example database [here (UNDER CONSTRUCTION)](todo).
 
 Solutions to the SQL challenges are available on request. 
-
 
 # 1) Review of database concepts
 
@@ -65,7 +66,14 @@ The schema is the metadata about the tables in the database and the fields (and 
 
 ### 1.3.1) Example
 
-The database we'll work with as our example is meta-data on questions and answers on the Stack Overflow code discussion website from 2016. We don't have the full text of the questions or the answers, but we do have the question and answer titles, some information about how popular the questions and answers were, information about the users posting questions or answers, and the topics (tags) associated with each question. Each question may have zero or more answers and each question may have one or more tags indicating what the question is above.
+The database we'll work with as our example is meta-data on questions and answers on the Stack Overflow code discussion website from 2016. We don't have the full text of the questions or the answers, but we do have:
+
+- the question and answer titles,
+- some information about how popular the questions and answers were,
+- information about the users posting questions or answers, and
+- the topics (tags) associated with each question.
+
+Each question may have zero or more answers and each question may have one or more tags indicating what the question is above.
 
 Let's consider how we might lay out the rows and columns of the Stack Overflow database if we tried to do it all in one table (e.g., all in one spreadsheet), with one row per question:
 
@@ -101,7 +109,7 @@ An alternative would be like this, with one row per question-answer pair:
 - answerer name
 - answerer age
 
-These approaches have a lot of disadvantages. Let's list them as a group:
+***Challenge***: These approaches have a lot of disadvantages. Let's list them as a group:
 
   - ??
   - ??
@@ -115,39 +123,33 @@ You can view one [reasonable schema here](normalized_example.png) that shows how
 
 The basic idea is to think about what tables you would create such that:
 
-- each row contains unique information
-- there is no duplication of information in some other row and
+- each row contains unique information,
+- there is no duplication of information in some other row, and
 - the number of columns can be known in advance without having columns with blank entries.
 
 (That said, if all anticipated uses of a database will end up recombining the same set of tables, we may want to have a denormalized schema in which those tables are actually combined in the database. It is possible to be too pure about normalization! We can also create a virtual table, called a *view*, as discussed later.)
 
 ### 1.3.2) Keys
 
-A key is a field or collection of fields that give(s) a unique value for every row/observation. A table in a database should then have a primary key that is the main unique identifier used by the DBMS. Foreign keys are columns in one table that give the value of the primary key in another table. When information from multiple tables is joined together, the matching of a row from one table to a row in another table is generally done by equating the primary key in one table with a foreign key in a different table.
+A key is one (or occasionally more) fields that give a unique value for every row/observation. A table in a database should then have a primary key that is the main unique identifier used by the DBMS. Foreign keys are columns in one table that give the value of the primary key in another table. When information from multiple tables is joined together, the matching of a row from one table to a row in another table is generally done by equating the primary key in one table with a foreign key in a different table.
 
 The lines between tables indicate the relationship of foreign keys in one table to primary keys in another table in the [schema we just saw](normalized_example.png).
 
-In our Stack Overflow example, the primary keys would presumably be: questions.ID, answers.ID, users.ID, and for QuestionsTags table two fields: {QuestionsTags.questionID, QuestionsTags.tag}.
+In our Stack Overflow example, the primary keys would presumably be: questions.questionid, answers.answerid, users.userid, and for QuestionsTags table two fields: {QuestionsTags.questionid, QuestionsTags.tag}.
 
 Some examples of foreign keys would be:
- - ownerID as the foreign key in Questions for joining with Users on the users primary key (ID)
- - questionID as the foreign key in Answers for joining with Questions on the questions primary key (ID)
-
+ - ownerid as the foreign key in Questions for joining on the userid primary key in Users
+ - questionid as the foreign key in Answers for joining on the questionid primary key in Questions
 
 # 2) Accessing a database from R or Python
 
 ## 2.1) Getting the example database
 
-I've obtained data from [Stack Overflow](https://stackoverflow.com), the popular website for asking coding questions, and placed it into a normalized database (which we'll define later). The SQLite version (also in CSVs as one CSV per table) has metadata (i.e., it lacks the actual text of the questions and answers) on all of the questions and answers posted in 2016.
+I've obtained data from [Stack Overflow](https://stackoverflow.com), the popular website for asking coding questions, and placed it into a normalized database. The SQLite version (also in CSVs as one CSV per table) has metadata (i.e., it lacks the actual text of the questions and answers) on all of the questions and answers posted in 2016.
 
-Now let's consider the organization of the Stack Overflow data. Each question may have multiple answers and each question may have multiple (topic) tags.
+You can download a copy of the SQLite version of the Stack Overflow database (only data for the year 2016) from [here](http://www.stat.berkeley.edu/share/paciorek/stackoverflow-2016.db) as discussed in the introduction of this tutorial. 
 
-
-You can download a copy of the SQLite version of the Stack Overflow database (only data for the year 2016) from [here](http://www.stat.berkeley.edu/share/paciorek/tutorial-databases-data.zip) as part of the overall zip with all of the example datasets as discussed in the introduction of this tutorial. 
-
-In the next section I'll assume the .db file is placed in the subdirectory of the repository called `data`.
-
-Note that all of the code used to download the data from the Stack Overflow website and to manipulate it to create a complete Postgres database and (for the year 2016 only) an SQLite database and CSVs for each table is in the `data/prep_stackoverflow` subdirectory of this repository. Note that as of January 2020, [the data are still being kept up to date online](https://archive.org/download/stackexchange).
+Note that all of the code used to download the data from the Stack Overflow website and to manipulate it to create a complete Postgres database and (for the year 2016 only) an SQLite database and CSVs for each table is in the `data/prep_stackoverflow` subdirectory of [this repository](https://github.com/berkeley-scf/tutorial-databases). Note that as of January 2020, [the data are still being kept up to date online](https://archive.org/download/stackexchange).
 
 Although DBMS have their own interfaces (we'll see a bit of this later), databases are commonly accessed from other programs. For data analysts this would often be Python or R, as seen next.
 
@@ -156,7 +158,11 @@ Most of our examples of making SQL queries on a database will be done from R, bu
 ## 2.2) Using SQL from R
 
 The *DBI* package provides a front-end for manipulating databases from a variety of DBMS (SQLite, MySQL, PostgreSQL, among others).
-Basically, you tell the package what DBMS is being used on the back-end, link to the actual database, and then you can use the standard functions in the package regardless of the back-end.
+Basically, you
+
+1) tell the package what DBMS is being used on the back-end,
+2) link to the actual database, and then
+3) use the standard functions in the package **regardless** of the back-end.
 
 With SQLite, R processes make calls against the stand-alone SQLite database (.db) file, so there are no SQLite-specific processes. With PostgreSQL, R processes call out to separate Postgres processes; these are started from the overall Postgres background process
 
@@ -165,7 +171,7 @@ You can access and navigate an SQLite database from R as follows.
 ```{r, eval=TRUE}
 library(RSQLite)
 drv <- dbDriver("SQLite")
-dir <- '.' # relative or absolute path to where the .db file is
+dir <- '.' # relative or absolute path to where the .db file is; here just the working directory
 dbFilename <- 'stackoverflow-2016.db'
 db <- dbConnect(drv, dbname = file.path(dir, dbFilename))
 dbGetQuery(db, "select * from questions limit 5")  # simple query to get 5 rows from a table
@@ -193,7 +199,8 @@ dbClearResult(query)  # clear to prepare for another query
 ```
 
 
-To disconnect from the database:
+To disconnect from the database (you probably don't want to do this now...):
+
 ```{r, eval=FALSE}
 dbDisconnect(db)
 ```
@@ -214,7 +221,7 @@ For SQLite:
 
 ```{python, eval=FALSE}
 import sqlite3 as sq
-dir <- 'data' # relative or absolute path to where the .db file is
+dir <- '.' # relative or absolute path to where the .db file is
 dbFilename <- 'stackoverflow-2016.db'
 import os
 db = sq.connect(os.path.join('data', dbFilename))
@@ -325,9 +332,9 @@ A common pattern of operation is to stratify the dataset, i.e., collect it into 
 
 Here's a basic example where we count the occurrences of different tags. 
 
-```{r, eval=SLOWEVAL}
+```{r, eval=FALSE}
 dbGetQuery(db, "select tag, count(*) as n from questions_tags
-                group by tag order by n desc limit 100")
+                group by tag order by n desc limit 20")
 ```
 
 ***Challenge***: What specifically does that query do? Describe the table that would be returned.
@@ -373,14 +380,14 @@ dbWriteTable(conn = db, name = "student", value = student, row.names = FALSE, ap
 
 Let's see an example of building up a (somewhat) more complicated query in pieces, using the tools discussed above.
 
-First suppose we want to find the number of users who have asked questions:
+1) First suppose we want to find the number of users who have asked questions.
 
 ```{r, eval=FALSE, echo=FALSE}
 dbGetQuery(db, "select count(*) from questions")
 dbGetQuery(db, "select count(distinct ownerid) from questions")
 ```
 
-How about finding the users who have asked at least 50 questions? How do we determine the number of questions per user? What are we grouping by?
+2) How about finding the users who have asked at least 50 questions? How do we determine the number of questions per user? What are we grouping by?
 
 ```{r, eval=FALSE, echo=FALSE}
 dbGetQuery(db, "select count(*) from questions group by ownerid")
@@ -388,7 +395,7 @@ dbGetQuery(db, "select ownerid, count(*) from questions group by ownerid")
 dbGetQuery(db, "select ownerid, count(*) as n from questions group by ownerid having n >= 50 order by n")
 ```
 
-What if we wanted actual information about the users, not just their ID? We need information from the users table.
+3) What if we wanted actual information about the users, not just their ID? We need information from the users table.
 
 ```{r, eval=FALSE, echo=FALSE}
 dbGetQuery(db, "select ownerid, count(*) as n from questions join users on
@@ -396,7 +403,7 @@ dbGetQuery(db, "select ownerid, count(*) as n from questions join users on
                group by ownerid having n >= 50 order by n")
 ```
 
-What if we wanted to count the number of users who have asked at least 50 questions? We'll discuss one way to do this later.
+4) What if we wanted to count the number of users who have asked at least 50 questions? We'll discuss one way to do this later.
 
 # 4) More advanced SQL
 
