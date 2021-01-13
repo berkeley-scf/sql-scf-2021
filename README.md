@@ -7,7 +7,7 @@ Materials for January 2021 SCF workshop on databases and SQL
 ### Required
 
 - Install either the RSQLite R package or the sqlite3 Python package on your laptop.
-- Download [these data files](http://www.stat.berkeley.edu/share/paciorek/tutorial-databases-data.zip) onto your laptop.
+- Download [this data files](http://www.stat.berkeley.edu/share/paciorek/stackoverflow-2016.db) onto your laptop.
 
 Alternatively, if you have an SCF account you can plan to use one of the SCF machines via ssh or the SCF Jupyterhub.
 
@@ -24,8 +24,8 @@ You can view the content by opening the `databases.html` file in a browser after
 Thursday:
 
 - 9 am - 9:30 am: (optional) review/introduction to databases and database schema and normalization
-- 9:30 am - 11 more advanced SQL: joins, set operations, string operations, subqueries, with time to work on questions
-- 11:30 - noon: discussion of efficiency, query plans 
+- 9:30 am - 11 am: more advanced SQL: joins, set operations, string operations, subqueries, with time to work on questions
+- 11:30 am - noon: discussion of efficiency, query plans 
 
 Friday:
 

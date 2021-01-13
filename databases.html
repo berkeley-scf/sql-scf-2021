@@ -409,8 +409,8 @@ dbGetQuery(db, &quot;select * from questions limit 5&quot;)  # simple query to g
 <pre><code class="r">dbListTables(db)
 </code></pre>
 
-<pre><code>## [1] &quot;answers&quot;        &quot;questions&quot;      &quot;questions_tags&quot;
-## [4] &quot;users&quot;
+<pre><code>## [1] &quot;answers&quot;        &quot;maxrep_answers&quot; &quot;questions&quot;     
+## [4] &quot;questions_tags&quot; &quot;users&quot;
 </code></pre>
 
 <pre><code class="r">dbListFields(db, &quot;questions&quot;)
@@ -692,13 +692,12 @@ dbWriteTable(conn = db, name = &quot;student&quot;, value = student, row.names =
 
 <p>Let&#39;s see an example of building up a (somewhat) more complicated query in pieces, using the tools discussed above.</p>
 
-<p>1) First suppose we want to find the number of users who have asked questions.</p>
-
-<p>2) How about finding the users who have asked at least 50 questions? How do we determine the number of questions per user? What are we grouping by?</p>
-
-<p>3) What if we wanted actual information about the users, not just their ID? We need information from the users table.</p>
-
-<p>4) What if we wanted to count the number of users who have asked at least 50 questions? We&#39;ll discuss one way to do this later.</p>
+<ol>
+<li><p>First suppose we want to find the number of users who have asked questions.</p></li>
+<li><p>How about finding the users who have asked at least 50 questions? How do we determine the number of questions per user? What are we grouping by?</p></li>
+<li><p>What if we wanted actual information about the users, not just their ID? We need information from the users table.</p></li>
+<li><p><strong><em>Challenge</em></strong>: What if we wanted to count the number of users who have asked at least 50 questions? We&#39;ll discuss one way to do this later.</p></li>
+</ol>
 
 <h1>4) More advanced SQL</h1>
 
@@ -761,21 +760,25 @@ dbWriteTable(conn = db, name = &quot;student&quot;, value = student, row.names =
 <p>In general, inner joins can be seen as a form of cross join followed by a condition that enforces matching between the rows of the table. More broadly, here are five equivalent joins that all perform the equivalent of an inner join:</p>
 
 <pre><code>select * from table1 join table2 on table1.id = table2.id ## explicit inner join
-select * from table1, table2 where table1.id = table2.id  ## without explicit JOIN
-select * from table1 cross join table2 where table1.id = table2.id 
-select * from table1 join table2 using(id)
-select * from table1 natural join table2
+select * from table1, table2 where table1.id = table2.id  ## without explicit (cross join)
+select * from table1 cross join table2 where table1.id = table2.id  ## explicit cross join
+select * from table1 join table2 using(id)                ## inner join again
+select * from table1 natural join table2                  ## natural (inner) join
 </code></pre>
 
 <p>Note that in the last query the join would be based on all common columns, which could be a bit dangerous if you don&#39;t look carefully at the schema of both tables. Assuming <code>id</code> is the common column, then the last of these queries is the same as the others.</p>
 
-<p><strong><em>Challenge</em></strong>:  Suppose the Stack Overflow database has 10,000 questions and 30,000 answers.</p>
+<p><strong><em>Challenge</em></strong>:  Suppose the Stack Overflow database has 10,000 questions, 30,000 answers, and 5,000 users. Please answer in the Zoom poll.</p>
 
-<p>1) If you do an inner join of questions and answers, how many rows would the result have?
-2) If you do a left outer join of questions and answers, how many rows would the result have?
-3) If you do a right outer join of questions and answers, how many rows would the result have?
-4) If you do a right outer join of questions and <em>users</em>, how many rows would the result have?
-5) If you do a cross join of questions and answers, how many rows would the result have?</p>
+<ol>
+<li>If you do an inner join of questions and answers, how many rows would the result have?</li>
+<li>If you do a left outer join of questions and answers, how many rows would the result have?</li>
+<li>If you do a right outer join of questions and answers, how many rows would the result have?</li>
+<li>If you do a right outer join of questions and <em>users</em>, how many rows would the result have?</li>
+<li>If you do a cross join of questions and answers, how many rows would the result have?</li>
+</ol>
+
+<p><strong><em>Challenge</em></strong>: What question would item #4 allow you to figure out?</p>
 
 <h2>4.2) Joining a table with itself (self joins)</h2>
 
@@ -797,13 +800,7 @@ How many rows are in the result?</p>
 
 <p><strong><em>Challenge</em></strong>: How many rows do we really want? What kinds of rows will we get that we don&#39;t want? </p>
 
-<p>A solution to that problem of having the same question paired with itself is:</p>
-
-<pre><code class="r">dbGetQuery(db, &quot;create view question_contrasts as
-               select * from questions Q1 join questions Q2
-               on Q1.ownerid = Q2.ownerid
-               where Q1.creationdate != Q2.creationdate&quot;)
-</code></pre>
+<p>A solution to that problem is:</p>
 
 <p><strong><em>Challenge</em></strong>: There&#39;s actually a further similar problem. What is the problem and how can we fix it by changing two characters in the query above? Hint, even as character strings, the creationdate column has an ordering.</p>
 
@@ -829,7 +826,7 @@ How many rows are in the result?</p>
 </code></pre>
 
 <pre><code>##    user  system elapsed 
-##   8.017   2.979  29.128
+##   8.094   3.014  29.226
 </code></pre>
 
 <p>Alternatively we can do a self-join. Note that the syntax gets complicated as we are doing multiple joins.</p>
@@ -848,7 +845,7 @@ How many rows are in the result?</p>
 </code></pre>
 
 <pre><code>##    user  system elapsed 
-##  15.426  14.433  47.445
+##  15.881  14.279  47.947
 </code></pre>
 
 <pre><code class="r">identical(result1, result2)
@@ -866,32 +863,52 @@ How many rows are in the result?</p>
 
 <p>Or we could use UNION or EXCEPT to find people who have asked either or only one type of question, respectively.</p>
 
-<p><strong><em>Challenge</em></strong>: Find all the questions about either R or Python</p>
+<p><strong><em>Challenge</em></strong>: Find all the questions about either R or Python.</p>
 
 <h2>4.4) String processing and creating new fields</h2>
+
+<p>We can do some basic matching with LIKE, using % as a wildcard and _ to stand in for any single character:</p>
+
+<pre><code class="r">dbGetQuery(db, &quot;select * from questions_tags where tag like &#39;r-%&#39; limit 10&quot;)
+</code></pre>
+
+<pre><code>##    questionid            tag
+## 1    35095638        r-caret
+## 2    35243702       r-raster
+## 3    35729179        r-caret
+## 4    36342481 r-googlesheets
+## 5    36374741 r-googlesheets
+## 6    36520591       r-raster
+## 7    36774095     r-corrplot
+## 8    36813566       r-raster
+## 9    36844460       r-raster
+## 10   36913170       r-lavaan
+</code></pre>
 
 <p>In Postgres, in addition the basic use of LIKE to match character strings, one can regular expression syntax with SIMILAR TO and one can extract substrings with SUBSTRING.</p>
 
 <p>These keywords are not available in SQLite so the following can only be done in the Postgres instance of our example database. Here we&#39;ll look for all tags that are of the form &ldquo;r-&rdquo;, &ldquo;-r&rdquo;, &ldquo;r&rdquo; or &ldquo;-r-&rdquo;. SQL uses % as a wildcard (this is not standard regular expression syntax). </p>
 
-<pre><code class="r">dbGetQuery(db, &quot;select * from tags where tag SIMILAR TO &#39;r-%|%-r|r|%-r-%&#39;&quot;)
+<pre><code class="r">## Try in postgreSQL, not SQLite
+result &lt;- dbGetQuery(db, &quot;select * from questions_tags where tag SIMILAR TO &#39;r-%|%-r|r|%-r-%&#39; limit 10&quot;)
 </code></pre>
 
 <p>To extract substrings we use SUBSTRING. Postgres requires that the pattern to be extracted be surrounded by <code>#&quot;</code> (one could use another character in place of <code>#</code>), but for use from R we need to escape the double-quote with a backslash so it is treated as a part of the string passed to Postgres and not treated by R as indicating where the character string stops/starts. </p>
 
-<pre><code class="r">dbGetQuery(db, &quot;select substring(creationdate from &#39;#\&quot;[[:digit:]]{4}#\&quot;%&#39; for &#39;#&#39;) as year
-               from questions limit 3&quot;)
+<pre><code class="r">## Try in postgreSQL, not SQLite
+dbGetQuery(db, &quot;select substring(creationdate from &#39;#\&quot;[[:digit:]]{4}#\&quot;%&#39; for &#39;#&#39;) as year
+               from questions limit 10&quot;)
 </code></pre>
 
 <p>Note that SQLite provides SUBSTR for substrings, but the flexibility of SUBSTR seems to be much less than use of SUBSTRING in PostgreSQL.</p>
 
 <p>Here is some <a href="https://www.postgresql.org/docs/current/functions-string.html">documentation on string functions in PostgreSQL</a>.</p>
 
-<p><strong><em>Challenge</em></strong>: Select the questions that have &ldquo;java&rdquo; in their titles using regular expression syntax (TODO: NEED TO TRY THIS)</p>
+<p><strong><em>Challenge</em></strong>: Select the questions that have &ldquo;java&rdquo; in their titles using regular expression syntax.</p>
 
 <p><strong><em>Challenge</em></strong>: Figure out how to calculate the length (in characters) of the title of each question. </p>
 
-<p><strong><em>Challenge</em></strong>:Process the creationdate field to create year, day, and month fields in a new view. Note that this would be good practice for string manipulation but you would want to handle dates and times using the material in the next section and not use string processing.</p>
+<p><strong><em>Challenge</em></strong>:Process the creationdate field to create year, day, and month fields in a new view. Note that this would be good practice for string manipulation, but you would want to handle dates and times using the material in the next section and not use string processing.</p>
 
 <h2>4.5) Dates and times</h2>
 
@@ -1018,30 +1035,28 @@ dbExecute(db, &quot;create view questionsAugment as
 <pre><code class="r">## don&#39;t be confused by the &quot;0&quot; response --
 ## it just means that nothing is returned to R; the view _has_ been created
 
-dbGetQuery(db, &quot;select * from questionsAugment where age &lt; 15 limit 5&quot;)
+dbGetQuery(db, &quot;select * from questionsAugment where age &gt; 70 limit 5&quot;)
 </code></pre>
 
 <pre><code>##   questionid        creationdate score viewcount
-## 1   34587110 2016-01-04 08:23:32     1        63
-## 2   34634653 2016-01-06 13:45:22     0       372
-## 3   35240563 2016-02-06 11:39:26     2        46
-## 4   35330718 2016-02-11 04:19:39     0        36
-## 5   35335506 2016-02-11 09:36:50     0       108
-##                                                           title
-## 1              How to set the selected item of UITabBar by code
-## 2           WooCommerce is complaining about wrong consumer key
-## 3 Cannot receive post parameter using forms created by PHP echo
-## 4                  How to test whether two color are equivalent
-## 5    How to set custom dismissal animation for UIViewController
-##   ownerid age displayname
-## 1 5034145  13    Tom Shen
-## 2 5034145  13    Tom Shen
-## 3 5034145  13    Tom Shen
-## 4 5034145  13    Tom Shen
-## 5 5034145  13    Tom Shen
+## 1   36143022 2016-03-21 22:44:16     2       158
+## 2   40596400 2016-11-14 19:30:32     1        28
+## 3   40612851 2016-11-15 14:51:51     1        32
+## 4   38532865 2016-07-22 18:10:34     0       134
+## 5   36189874 2016-03-23 22:25:56     0        32
+##                                                                                                                         title
+## 1                                                                                        Record aggregate with dynamic choice
+## 2 Why does Xcode report &quot;Variable &#39;tuple.0&#39; used before being initialized&quot; after I&#39;ve assigned all elements of a Swift tuple?
+## 3                                                     Converting a Swift array of Ints into an array of its running subtotals
+## 4                                                          Algorithm to generate all permutations of pairs without repetition
+## 5                                                             Mediawiki 1.26.2 upgrade - categories listed in a single column
+##   ownerid age  displayname
+## 1   40851  71 Simon Wright
+## 2   74966  71        hkatz
+## 3   74966  71        hkatz
+## 4   98062  71   Rocky Luck
+## 5  332786  71     Sakshale
 </code></pre>
-
-<p>One use of a view would be to create a mega table that stores all the information from multiple tables in the (unnormalized) form you might have if you simply had one data frame in R or Python.</p>
 
 <h2>4.7) Subqueries</h2>
 
@@ -1060,13 +1075,11 @@ dbGetQuery(db, &quot;select * from questionsAugment where age &lt; 15 limit 5&qu
                order by n desc&quot;)
 </code></pre>
 
-<p>It might be hard to just come up with that. A good strategy is probably to think about creating a view that is the result of the inner query and then have the outer query use that. You can then piece together the complicated query in a modular way. For big databases, you are likely to want to submit this as a single query and not two queries so that the SQL optimizer can determine the best way to do the operations. But you want to start with code that you&#39;re confident will give you the right answer!</p>
+<p>It might be hard to write that query directly from your brain. A good strategy is probably to think about creating a view that is the result of the inner query and then have the outer query use that. You can then piece together the complicated query in a modular way. For big databases, you are likely to want to submit this as a single query and not two queries so that the SQL optimizer can determine the best way to do the operations. But you want to start with code that you&#39;re confident will give you the right answer!</p>
 
 <p>Note we could also have done that query using a subquery in the WHERE statement. </p>
 
-<p><strong><em>Challenge</em></strong>: Write a query that, for each question, will return the question title, number of answers, and the answer to that question written by the user with the highest reputation.</p>
-
-<p>Finally one can use subqueries in the SELECT clause to create new variables, but we won&#39;t go into that here.</p>
+<p><strong><em>Challenge</em></strong>: How would you write a query using join and group by to find the answer to each question from the user with the maximum reputation amongst all those answering the question?  Then use the result of as the subquery in a join with the questions table. The result should be the question information plus the title of the answer to that question written by the user with the highest reputation.</p>
 
 <h3>4.7.2) Subqueries in the WHERE statement</h3>
 
@@ -1104,7 +1117,15 @@ dbGetQuery(db, &quot;select * from questionsAugment where age &lt; 15 limit 5&qu
 
 <p><strong><em>Challenge</em></strong>: Create a frequency list of the tags used in the top 100 most answered questions. Note there is a way to do this with a JOIN and a way without a JOIN.</p>
 
+<p>Finally one can use subqueries in the SELECT clause to create new variables, but we won&#39;t go into that here.</p>
+
 <h2>4.8 Challenge questions</h2>
+
+<ul>
+<li>Use a subquery in the WHERE clause to count the tags used in the 100 most answered questions.</li>
+</ul>
+
+<p><strong><em>Challenge</em></strong>: Write </p>
 
 <p>see hard questions under window functions?</p>
 
@@ -1122,21 +1143,21 @@ dbGetQuery(db, &quot;select * from questionsAugment where age &lt; 15 limit 5&qu
 </code></pre>
 
 <pre><code>##    user  system elapsed 
-##   0.456   0.335   2.513
+##   0.385   0.384   2.454
 </code></pre>
 
 <pre><code class="r">system.time(dbExecute(db, &quot;create index count_index on questions (viewcount)&quot;))  # 5.6 seconds
 </code></pre>
 
 <pre><code>##    user  system elapsed 
-##   1.852   0.661   6.132
+##   1.837   0.671   6.659
 </code></pre>
 
 <pre><code class="r">system.time(dbGetQuery(db, &quot;select * from questions where viewcount &gt; 10000&quot;))    # 0.9 seconds
 </code></pre>
 
 <pre><code>##    user  system elapsed 
-##   0.015   0.056   0.939
+##   0.035   0.033   0.887
 </code></pre>
 
 <pre><code class="r">## restore earlier state by removing index
@@ -1144,7 +1165,7 @@ system.time(dbExecute(db, &quot;drop index count_index&quot;))
 </code></pre>
 
 <pre><code>##    user  system elapsed 
-##   0.056   0.055   0.537
+##   0.061   0.021   0.310
 </code></pre>
 
 <p>In other contexts, an index can save huge amounts of time. So if you&#39;re working with a database and speed is important, check to see if there are indexes.</p>
