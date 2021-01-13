@@ -69,25 +69,26 @@ The schema is the metadata about the tables in the database and the fields (and 
 
 The database we'll work with as our example is meta-data on questions and answers on the Stack Overflow code discussion website from 2016. We don't have the full text of the questions or the answers, but we do have:
 
-- the question and answer titles,
+- the question title and date posted,
+- the date posted for each answer,
 - some information about how popular the questions and answers were,
 - information about the users posting questions or answers, and
 - the topics (tags) associated with each question.
 
-Each question may have zero or more answers and each question may have one or more tags indicating what the question is above.
+Each question may have zero or more answers and each question has one or more tags indicating what the question is above.
 
 Let's consider how we might lay out the rows and columns of the Stack Overflow database if we tried to do it all in one table (e.g., all in one spreadsheet), with one row per question:
 
 - question id
 - question title
-- date
-- viewcount
+- question date
+- question viewcount
 - owner id
-- owner_age
-- owner_displayname
-- answer 1 title
+- owner age
+- owner displayname
+- answer 1 date
 - ...
-- answer n title
+- answer n date
 - answerer 1 id
 - ...
 - answerer n id
@@ -103,9 +104,9 @@ An alternative would be like this, with one row per question-answer pair:
 
 - question id
 - question title
-- date
+- question date
 - viewcount
-- answer title
+- answer date
 - answerer id
 - answerer name
 - answerer age
@@ -654,33 +655,28 @@ We can use subqueries in the FROM statement to create a temporary table to use i
 
 ***Challenge***: What does the following do?
 
-
 ```{r, eval=FALSE}
-dbGetQuery(db, "select T.tag, count(*) as n
-               from questions_tags T join
-               (select questionid from answers group by questionid
-               order by count(*) desc limit 100) most_answered
-               on T.questionid = most_answered.questionid
-               group by T.tag
-               order by n desc")
+dbGetQuery(db, "select * from questions join
+	       (select *, count(*) as n_answered from answers join users 
+	       on ownerid = userid group by userid)")
 ```
 
-It might be hard to write that query directly from your brain. A good strategy is probably to think about creating a view that is the result of the inner query and then have the outer query use that. You can then piece together the complicated query in a modular way. For big databases, you are likely to want to submit this as a single query and not two queries so that the SQL optimizer can determine the best way to do the operations. But you want to start with code that you're confident will give you the right answer!
+It might be hard to write that query all at once. A good strategy is probably to think about creating a view that is the result of the inner query and then have the outer query use that. You can then piece together the complicated query in a modular way. For big databases, you are likely to want to submit this as a single query and not two queries so that the SQL optimizer can determine the best way to do the operations. But you want to start with code that you're confident will give you the right answer!
 
-Note we could also have done that query using a subquery in the WHERE statement. 
+Note we could also have done that query using a subquery in the WHERE statement (discussed next). 
 
-***Challenge***: How would you write a query using join and group by to find the answer to each question from the user with the maximum reputation amongst all those answering the question?  Then use the result of as the subquery in a join with the questions table. The result should be the question information plus the title of the answer to that question written by the user with the highest reputation.
+***Challenge (hard version)***: Write a query that returns the title of each question and answer to each question from the user with the highest reputation amongst all those answering the question. 
 
-
+***Challenge (easier, step-by-step version)***: How would you write a query using JOIN and GROUP BY to find the answer to each question from the user with the maximum reputation amongst all those answering the question?  Then use what you came up with as the subquery in a join with the questions table. The result should be the question information plus the answer to that question written by the user with the highest reputation.
 
 ### 4.7.2) Subqueries in the WHERE statement
 
 Instead of a join, we can use subqueries as a way to combine information across tables, with the subquery involved in a WHERE statement. The subquery creates a set and we then can check for inclusion in (or exclusion from with `not in`) that set.
 
-For example, suppose we want to know the average number of UpVotes for users who have posted a question with the tag "python".
+For example, suppose we want to know the average reputation for users who have posted a question with the tag "python".
 
 ```{r, eval=TRUE}
-dbGetQuery(db, "select avg(UpVotes) from users where userid in
+dbGetQuery(db, "select avg(reputation) from users where userid in
                (select distinct ownerid from
                questions join questions_tags on questions.questionid = questions_tags.questionid
                where tag = 'python')")       
@@ -688,36 +684,28 @@ dbGetQuery(db, "select avg(UpVotes) from users where userid in
 
 In some cases one can do a join rather than using a subquery, but in this example, it fails.
 
-***Challenge***: What's wrong with the following query as an attempt to answer the question above? (See if you can figure it out before looking at the answer below.)
+***Challenge***: What's wrong with the following query as an attempt to answer the question above? 
 
 ```{r, eval=FALSE}
-dbGetQuery(db, "select avg(UpVotes) from questions, questions_tags, users
-               where questions.questionid = questions_tags.questionid and
+dbGetQuery(db, "select avg(reputation) from questions join questions_tags
+               on questions.questionid = questions_tags.questionid
+	       join users on
                questions.ownerid = users.userid and
                tag = 'python'")
 ```
 
 For more details on subqueries, see the video on "subqueries in where statements" in this [Introduction to Databases MOOC](http://cs.stanford.edu/people/widom/DB-mooc.html).
 
-(Answer: In the subquery, we find the Ids of the users we are looking for and then average over the UpVotes of those individuals. In the join version we found all the questions that had a Python tag and averaged over the UpVotes of the individuals associated with those questions. So the latter includes multiple UpVotes values from individuals who have posted multiple Python questions.)
 
-
-***Challenge***: Write a query that would return the users who have answered a question with the Python tag. We've seen this challenge before, but do it now based on a subquery.
-
-***Challenge***: How would you find all the answers associated with the user with the most upvotes?
-
-***Challenge***: Create a frequency list of the tags used in the top 100 most answered questions. Note there is a way to do this with a JOIN and a way without a JOIN.
+***Challenge***: Write a query that would return the users who have answered a question with the Python tag. We've seen queries like this before, but do it now based on a subquery.
 
 Finally one can use subqueries in the SELECT clause to create new variables, but we won't go into that here.
 
-## 4.8 Challenge questions
+## 4.8 Additional challenge questions
 
-- Use a subquery in the WHERE clause to count the tags used in the 100 most answered questions.
+***Challenge***: Create a frequency list of the tags used in the top 100 most answered questions. Note there is a way to do this with a JOIN and a way without a JOIN.
 
-***Challenge***: Write 
-
-
-see hard questions under window functions?
+***Challenge***: How would you find all the answers associated with the user with the most upvotes?
 
 # 5) Efficient SQL queries
 
