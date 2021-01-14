@@ -825,7 +825,7 @@ How many rows are in the result?</p>
 </code></pre>
 
 <pre><code>##    user  system elapsed 
-##   7.984   3.100  29.170
+##   8.057   3.062  29.021
 </code></pre>
 
 <p>Alternatively we can do a self-join. Note that the syntax gets complicated as we are doing multiple joins.</p>
@@ -844,7 +844,7 @@ How many rows are in the result?</p>
 </code></pre>
 
 <pre><code>##    user  system elapsed 
-##  15.985  14.351  50.423
+##  15.663  14.502  50.016
 </code></pre>
 
 <pre><code class="r">identical(result1, result2)
@@ -1071,7 +1071,8 @@ dbGetQuery(db, &quot;select * from questionsAugment where age &gt; 70 limit 5&qu
 
 <pre><code class="r">dbGetQuery(db, &quot;select * from questions join
            (select *, count(*) as n_answered from answers join users 
-           on ownerid = userid group by userid)&quot;)
+           on ownerid = userid group by userid order by n_answered desc limit 1000) count_answers on
+               questions.questionid = count_answers.questionid&quot;)
 </code></pre>
 
 <p>It might be hard to write that query all at once. A good strategy is probably to think about creating a view that is the result of the inner query and then have the outer query use that. You can then piece together the complicated query in a modular way. For big databases, you are likely to want to submit this as a single query and not two queries so that the SQL optimizer can determine the best way to do the operations. But you want to start with code that you&#39;re confident will give you the right answer!</p>
@@ -1135,21 +1136,21 @@ dbGetQuery(db, &quot;select * from questionsAugment where age &gt; 70 limit 5&qu
 </code></pre>
 
 <pre><code>##    user  system elapsed 
-##   0.379   0.391   2.515
+##   0.416   0.340   2.458
 </code></pre>
 
 <pre><code class="r">system.time(dbExecute(db, &quot;create index count_index on questions (viewcount)&quot;))  
 </code></pre>
 
 <pre><code>##    user  system elapsed 
-##   1.883   0.657   7.669
+##   1.764   0.740   6.498
 </code></pre>
 
 <pre><code class="r">system.time(dbGetQuery(db, &quot;select * from questions where viewcount &gt; 10000&quot;))   
 </code></pre>
 
 <pre><code>##    user  system elapsed 
-##   0.033   0.040   0.936
+##   0.024   0.042   0.909
 </code></pre>
 
 <pre><code class="r">## restore earlier state by removing index
@@ -1172,6 +1173,12 @@ dbExecute(db, &quot;drop index count_index&quot;)
 <p>Here&#39;s some information on how such trees are constructed and searched: <a href="http://use-the-index-luke.com/sql/anatomy/the-tree">http://use-the-index-luke.com/sql/anatomy/the-tree</a></p>
 
 <p>In SQLite, indexes are implemented by creating a separate index table that maps from the value to the row index in the indexed table, allowing for fast lookup of a row. </p>
+
+<h3>5.1.2) Index lookup vs. sequential scan</h3>
+
+<p>Using an index is good in that can go to the data needed very quickly based on random access to the disk locations of the data of interest, but if it requires the computer to examine a large number of rows, it may not be better than sequential scan. An advantage of sequential scan is that it will make good use of the CPU cache, reading chunks of data and then accessing the individual pieces of data quickly. </p>
+
+<p>Ideally you&#39;d do sequential scan of exactly the subset of the rows that you need, with that subset available in contiguous storage. </p>
 
 <h2>5.2) Ideas for improving efficiency</h2>
 
@@ -1202,60 +1209,19 @@ dbExecute(db, &quot;drop index count_index&quot;)
                questions.questionid = questions_tags.questionid&quot;)
 </code></pre>
 
-<pre><code>                                                                       QUERY PLAN
-1                   Hash Join  (cost=143426.44..493116.49 rows=7107842 width=133)
-2                   Hash Cond: (questions_tags.questionid = questions.questionid)
-3    -&gt;  Seq Scan on questions_tags  (cost=0.00..116595.42 rows=7107842 width=20)
-4                      -&gt;  Hash  (cost=69539.64..69539.64 rows=2456464 width=113)
-5         -&gt;  Seq Scan on questions  (cost=0.00..69539.64 rows=2456464 width=113)
-6                                                                            JIT:
-7                                                                   Functions: 10
-8   Options: Inlining false, Optimization false, Expressions true, Deforming true
+<pre><code>                                                                         QUERY PLAN
+1                   Hash Join  (cost=744893.91..2085537.32 rows=39985376 width=118)
+2                     Hash Cond: (questions_tags.questionid = questions.questionid)
+3     -&gt;  Seq Scan on questions_tags  (cost=0.00..634684.76 rows=39985376 width=16)
+4                     -&gt;  Hash  (cost=365970.96..365970.96 rows=13472796 width=102)
+5         -&gt;  Seq Scan on questions  (cost=0.00..365970.96 rows=13472796 width=102)
+6                                                                              JIT:
+7                                                                     Functions: 10
+8       Options: Inlining true, Optimization true, Expressions true, Deforming true
 </code></pre>
 
 <pre><code class="r">dbGetQuery(db, &quot;explain select * from questions cross join questions_tags where
                questions.questionid = questions_tags.questionid&quot;)
-</code></pre>
-
-<pre><code>                                                                       QUERY PLAN
-1                   Hash Join  (cost=143195.95..492351.62 rows=7097067 width=133)
-2                   Hash Cond: (questions_tags.questionid = questions.questionid)
-3    -&gt;  Seq Scan on questions_tags  (cost=0.00..116418.67 rows=7097067 width=20)
-4                      -&gt;  Hash  (cost=69428.31..69428.31 rows=2452531 width=113)
-5         -&gt;  Seq Scan on questions  (cost=0.00..69428.31 rows=2452531 width=113)
-6                                                                            JIT:
-7                                                                   Functions: 10
-8   Options: Inlining false, Optimization false, Expressions true, Deforming true
-</code></pre>
-
-<p>We see that the query plan indicates the two queries are using the same steps, with comparable cost.</p>
-
-<p>Here&#39;s additional information on interpreting what you see: <a href="https://www.postgresql.org/docs/current/static/using-explain.html">https://www.postgresql.org/docs/current/static/using-explain.html</a>.</p>
-
-<p>Let&#39;s consider a join with a filter, with and without indexes.</p>
-
-<pre><code class="r">dbGetQuery(db, &quot;explain select * from questions join questions_tags on
-               questions.questionid = questions_tags.questionid where tag like &#39;python&#39;&quot;)
-</code></pre>
-
-<pre><code>                                                                                         QUERY PLAN
-1                                           Gather  (cost=81480.95..148717.61 rows=85695 width=133)
-2                                                                                Workers Planned: 2
-3                           -&gt;  Parallel Hash Join  (cost=80480.95..139148.11 rows=35706 width=133)
-4                                     Hash Cond: (questions.questionid = questions_tags.questionid)
-5                   -&gt;  Parallel Seq Scan on questions  (cost=0.00..53554.26 rows=992826 width=113)
-6                                  -&gt;  Parallel Hash  (cost=80034.62..80034.62 rows=35706 width=20)
-7                -&gt;  Parallel Seq Scan on questions_tags  (cost=0.00..80034.62 rows=35706 width=20)
-8                                                                   Filter: (tag ~~ &#39;python&#39;::text)
-9                                                                                              JIT:
-10                                                                                    Functions: 12
-11                    Options: Inlining false, Optimization false, Expressions true, Deforming true
-</code></pre>
-
-<pre><code class="r">system.time(dbExecute(db, &quot;create index qid_index on questions (questionid)&quot;))  # 5.6 seconds
-system.time(dbExecute(db, &quot;create index tid_index on questions_tags (questionid)&quot;))  # 5.6 seconds
-dbGetQuery(db, &quot;explain select * from questions join questions_tags on
-               questions.questionid = questions_tags.questionid where tag like &#39;python&#39;&quot;)
 </code></pre>
 
 <pre><code>                                                                         QUERY PLAN
@@ -1264,41 +1230,16 @@ dbGetQuery(db, &quot;explain select * from questions join questions_tags on
 3     -&gt;  Seq Scan on questions_tags  (cost=0.00..634684.76 rows=39985376 width=16)
 4                     -&gt;  Hash  (cost=365970.96..365970.96 rows=13472796 width=102)
 5         -&gt;  Seq Scan on questions  (cost=0.00..365970.96 rows=13472796 width=102)
+6                                                                              JIT:
+7                                                                     Functions: 10
+8       Options: Inlining true, Optimization true, Expressions true, Deforming true
 </code></pre>
 
-<p>The main thing to look for is to see if the query will be done by using an index or by sequential scan (i.e., looking at all the rows). </p>
+<p>We see that the query plan indicates the two queries are using the same steps, with the same cost.</p>
 
-<p>Let&#39;s compare the query plan for doing a set operation versus a join. This is the problem where we determined which users had asked a question about R and a question about Python.</p>
+<p>Here&#39;s additional information on interpreting what you see: <a href="https://www.postgresql.org/docs/current/static/using-explain.html">https://www.postgresql.org/docs/current/static/using-explain.html</a>.</p>
 
-<pre><code class="r">## Set operation
-dbGetQuery(db, &quot;explain select displayname, userid from
-               questions Q join users U on U.userid = Q.ownerid
-               join questions_tags T on Q.questionid = T.questionid
-               where tag = &#39;r&#39;
-               intersect
-               select displayname, userid from
-               questions Q join users U on U.userid = Q.ownerid
-               join questions_tags T on Q.questionid = T.questionid
-               where tag = &#39;python&#39;&quot;)
-</code></pre>
-
-<pre><code class="r">## Using a join instead
-dbGetQuery(db, &quot;explain select displayname, userid from
-               (questions Q1 join questions_tags T1
-               on Q1.questionid = T1.questionid)
-               join
-               (questions Q2 join questions_tags T2
-               on Q2.questionid = T2.questionid)
-               on Q1.ownerid = Q2.ownerid
-               join users on Q1.ownerid = users.userid
-               where T1.tag = &#39;r&#39; and T2.tag = &#39;python&#39;&quot;)
-</code></pre>
-
-<h3>5.3.1) Index lookup vs. sequential scan</h3>
-
-<p>Using an index is good in that can go to the data needed very quickly based on random access to the disk locations of the data of interest, but if it requires the computer to examine a large number of rows, it may not be better than sequential scan. An advantage of sequential scan is that it will make good use of the CPU cache, reading chunks of data and then accessing the individual pieces of data quickly. </p>
-
-<p>Ideally you&#39;d do sequential scan of exactly the subset of the rows that you need, with that subset available in contiguous storage. </p>
+<p>One important thing to look for is to see if the query will be done by using an index or by sequential scan (i.e., looking at all the rows). </p>
 
 <h2>5.4) Disk caching</h2>
 
