@@ -825,7 +825,7 @@ How many rows are in the result?</p>
 </code></pre>
 
 <pre><code>##    user  system elapsed 
-##   8.057   3.062  29.021
+##   8.364   3.133  29.330
 </code></pre>
 
 <p>Alternatively we can do a self-join. Note that the syntax gets complicated as we are doing multiple joins.</p>
@@ -844,7 +844,7 @@ How many rows are in the result?</p>
 </code></pre>
 
 <pre><code>##    user  system elapsed 
-##  15.663  14.502  50.016
+##  16.658  15.064  51.735
 </code></pre>
 
 <pre><code class="r">identical(result1, result2)
@@ -1069,10 +1069,10 @@ dbGetQuery(db, &quot;select * from questionsAugment where age &gt; 70 limit 5&qu
 
 <p><strong><em>Challenge</em></strong>: What does the following do?</p>
 
-<pre><code class="r">dbGetQuery(db, &quot;select * from questions join
-           (select *, count(*) as n_answered from answers join users 
-           on ownerid = userid group by userid order by n_answered desc limit 1000) count_answers on
-               questions.questionid = count_answers.questionid&quot;)
+<pre><code class="r">dbGetQuery(db, &quot;select * from questions join answers A on questions.questionid = A.questionid join 
+           (select *, count(*) as n_answered from users 
+           group by userid order by n_answered desc limit 1000) most_responsive on
+               A.ownerid = most_responsive.userid&quot;)
 </code></pre>
 
 <p>It might be hard to write that query all at once. A good strategy is probably to think about creating a view that is the result of the inner query and then have the outer query use that. You can then piece together the complicated query in a modular way. For big databases, you are likely to want to submit this as a single query and not two queries so that the SQL optimizer can determine the best way to do the operations. But you want to start with code that you&#39;re confident will give you the right answer!</p>
@@ -1136,21 +1136,21 @@ dbGetQuery(db, &quot;select * from questionsAugment where age &gt; 70 limit 5&qu
 </code></pre>
 
 <pre><code>##    user  system elapsed 
-##   0.416   0.340   2.458
+##   0.400   0.383   2.457
 </code></pre>
 
 <pre><code class="r">system.time(dbExecute(db, &quot;create index count_index on questions (viewcount)&quot;))  
 </code></pre>
 
 <pre><code>##    user  system elapsed 
-##   1.764   0.740   6.498
+##   1.969   0.544   6.586
 </code></pre>
 
 <pre><code class="r">system.time(dbGetQuery(db, &quot;select * from questions where viewcount &gt; 10000&quot;))   
 </code></pre>
 
 <pre><code>##    user  system elapsed 
-##   0.024   0.042   0.909
+##   0.031   0.045   0.985
 </code></pre>
 
 <pre><code class="r">## restore earlier state by removing index

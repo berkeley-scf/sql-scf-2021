@@ -654,10 +654,10 @@ We can use subqueries in the FROM statement to create a temporary table to use i
 ***Challenge***: What does the following do?
 
 ```{r, eval=FALSE}
-dbGetQuery(db, "select * from questions join
-	       (select *, count(*) as n_answered from answers join users 
-	       on ownerid = userid group by userid order by n_answered desc limit 1000) count_answers on
-               questions.questionid = count_answers.questionid")
+dbGetQuery(db, "select * from questions join answers A on questions.questionid = A.questionid join 
+	       (select *, count(*) as n_answered from users 
+	       group by userid order by n_answered desc limit 1000) most_responsive on
+               A.ownerid = most_responsive.userid")
 ```
 
 It might be hard to write that query all at once. A good strategy is probably to think about creating a view that is the result of the inner query and then have the outer query use that. You can then piece together the complicated query in a modular way. For big databases, you are likely to want to submit this as a single query and not two queries so that the SQL optimizer can determine the best way to do the operations. But you want to start with code that you're confident will give you the right answer!
