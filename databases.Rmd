@@ -382,7 +382,7 @@ dbWriteTable(conn = db, name = "student", value = student, row.names = FALSE, ap
 
 Let's see an example of building up a (somewhat) more complicated query in pieces, using the tools discussed above.
 
-1. First suppose we want to find the number of users who have asked questions.
+ - 1. First suppose we want to find the number of users who have asked questions.
 
 ```{r, eval=FALSE}
 ## total number of questions
@@ -391,7 +391,7 @@ dbGetQuery(db, "select count(*) from questions")
 dbGetQuery(db, "select count(distinct ownerid) from questions")
 ```
 
-2. How about finding the users who have asked at least 50 questions? How do we determine the number of questions per user? What are we grouping by?
+ - 2. How about finding the users who have asked at least 50 questions? How do we determine the number of questions per user? What are we grouping by?
 
 ```{r, eval=FALSE}
 dbGetQuery(db, "select ownerid, count(*) as n from questions group by ownerid
@@ -399,7 +399,7 @@ dbGetQuery(db, "select ownerid, count(*) as n from questions group by ownerid
 
 ```
 
-3. What if we wanted actual information about the users, not just their ID? We need information from the users table.
+ - 3. What if we wanted actual information about the users, not just their ID? We need information from the users table.
 
 ```{r, eval=FALSE}
 dbGetQuery(db, "select displayname, reputation, ownerid, count(*) as n from questions join users
@@ -408,7 +408,7 @@ dbGetQuery(db, "select displayname, reputation, ownerid, count(*) as n from ques
                  having n >= 50 order by n desc limit 5")
 ```
 
-4. ***Challenge***: What if we wanted to count the number of users who have asked at least 50 questions? We'll discuss one way to do this later.
+ - 4. ***Challenge***: What if we wanted to count the number of users who have asked at least 50 questions? We'll discuss one way to do this later.
 
 # 4) More advanced SQL
 

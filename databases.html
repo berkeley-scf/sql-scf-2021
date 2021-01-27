@@ -695,9 +695,9 @@ dbWriteTable(conn = db, name = &quot;student&quot;, value = student, row.names =
 
 <p>Let&#39;s see an example of building up a (somewhat) more complicated query in pieces, using the tools discussed above.</p>
 
-<ol>
-<li>First suppose we want to find the number of users who have asked questions.</li>
-</ol>
+<ul>
+<li>1. First suppose we want to find the number of users who have asked questions.</li>
+</ul>
 
 <pre><code class="r">## total number of questions
 dbGetQuery(db, &quot;select count(*) from questions&quot;)
@@ -705,17 +705,17 @@ dbGetQuery(db, &quot;select count(*) from questions&quot;)
 dbGetQuery(db, &quot;select count(distinct ownerid) from questions&quot;)
 </code></pre>
 
-<ol>
-<li>How about finding the users who have asked at least 50 questions? How do we determine the number of questions per user? What are we grouping by?</li>
-</ol>
+<ul>
+<li>2. How about finding the users who have asked at least 50 questions? How do we determine the number of questions per user? What are we grouping by?</li>
+</ul>
 
 <pre><code class="r">dbGetQuery(db, &quot;select ownerid, count(*) as n from questions group by ownerid
                  having n &gt;= 50 order by n desc limit 5&quot;)
 </code></pre>
 
-<ol>
-<li>What if we wanted actual information about the users, not just their ID? We need information from the users table.</li>
-</ol>
+<ul>
+<li>3. What if we wanted actual information about the users, not just their ID? We need information from the users table.</li>
+</ul>
 
 <pre><code class="r">dbGetQuery(db, &quot;select displayname, reputation, ownerid, count(*) as n from questions join users
                  on questions.ownerid = users.userid
@@ -723,9 +723,9 @@ dbGetQuery(db, &quot;select count(distinct ownerid) from questions&quot;)
                  having n &gt;= 50 order by n desc limit 5&quot;)
 </code></pre>
 
-<ol>
-<li><strong><em>Challenge</em></strong>: What if we wanted to count the number of users who have asked at least 50 questions? We&#39;ll discuss one way to do this later.</li>
-</ol>
+<ul>
+<li>4. <strong><em>Challenge</em></strong>: What if we wanted to count the number of users who have asked at least 50 questions? We&#39;ll discuss one way to do this later.</li>
+</ul>
 
 <h1>4) More advanced SQL</h1>
 
@@ -850,7 +850,7 @@ How many rows are in the result?</p>
 </code></pre>
 
 <pre><code>##    user  system elapsed 
-##   7.909   2.847  29.480
+##   8.058   2.733  29.709
 </code></pre>
 
 <p>Alternatively we can do a self-join. Note that the syntax gets complicated as we are doing multiple joins.</p>
@@ -869,7 +869,7 @@ How many rows are in the result?</p>
 </code></pre>
 
 <pre><code>##    user  system elapsed 
-##  15.788  15.353  53.090
+##  15.385  14.785  48.525
 </code></pre>
 
 <pre><code class="r">identical(result1, result2)
@@ -1161,21 +1161,21 @@ dbGetQuery(db, &quot;select * from questionsAugment where age &gt; 70 limit 5&qu
 </code></pre>
 
 <pre><code>##    user  system elapsed 
-##   0.369   0.377   2.453
+##   0.405   0.340   2.479
 </code></pre>
 
 <pre><code class="r">system.time(dbExecute(db, &quot;create index count_index on questions (viewcount)&quot;))  
 </code></pre>
 
 <pre><code>##    user  system elapsed 
-##   1.852   0.588   7.220
+##   1.926   0.578   6.548
 </code></pre>
 
 <pre><code class="r">system.time(dbGetQuery(db, &quot;select * from questions where viewcount &gt; 10000&quot;))   
 </code></pre>
 
 <pre><code>##    user  system elapsed 
-##   0.004   0.061   0.965
+##   0.020   0.045   0.864
 </code></pre>
 
 <pre><code class="r">## restore earlier state by removing index
