@@ -540,7 +540,7 @@ We can do some basic matching with LIKE, using % as a wildcard and _ to stand in
 dbGetQuery(db, "select * from questions_tags where tag like 'r-%' limit 10")
 ```
 
-In Postgres, in addition to the basic use of LIKE to match character strings, one can regular expression syntax with SIMILAR TO and one can extract substrings with SUBSTRING.
+In Postgres, in addition to the basic use of LIKE to match character strings, one can use regular expression syntax with SIMILAR TO and one can extract substrings with SUBSTRING.
 
 These keywords are not available in SQLite so the following can only be done in the Postgres instance of our example database. Here we'll look for all tags that are of the form "r-", "-r", "r" or "-r-". SQL uses % as a wildcard (this is not standard regular expression syntax). 
 

@@ -825,7 +825,7 @@ How many rows are in the result?</p>
 </code></pre>
 
 <pre><code>##    user  system elapsed 
-##   8.364   3.133  29.330
+##   7.790   2.788  29.180
 </code></pre>
 
 <p>Alternatively we can do a self-join. Note that the syntax gets complicated as we are doing multiple joins.</p>
@@ -844,7 +844,7 @@ How many rows are in the result?</p>
 </code></pre>
 
 <pre><code>##    user  system elapsed 
-##  16.658  15.064  51.735
+##  14.930  15.039  48.788
 </code></pre>
 
 <pre><code class="r">identical(result1, result2)
@@ -884,7 +884,7 @@ How many rows are in the result?</p>
 ## 10   36913170       r-lavaan
 </code></pre>
 
-<p>In Postgres, in addition to the basic use of LIKE to match character strings, one can regular expression syntax with SIMILAR TO and one can extract substrings with SUBSTRING.</p>
+<p>In Postgres, in addition to the basic use of LIKE to match character strings, one can use regular expression syntax with SIMILAR TO and one can extract substrings with SUBSTRING.</p>
 
 <p>These keywords are not available in SQLite so the following can only be done in the Postgres instance of our example database. Here we&#39;ll look for all tags that are of the form &ldquo;r-&rdquo;, &ldquo;-r&rdquo;, &ldquo;r&rdquo; or &ldquo;-r-&rdquo;. SQL uses % as a wildcard (this is not standard regular expression syntax). </p>
 
@@ -1136,21 +1136,21 @@ dbGetQuery(db, &quot;select * from questionsAugment where age &gt; 70 limit 5&qu
 </code></pre>
 
 <pre><code>##    user  system elapsed 
-##   0.400   0.383   2.457
+##   0.403   0.361   2.473
 </code></pre>
 
 <pre><code class="r">system.time(dbExecute(db, &quot;create index count_index on questions (viewcount)&quot;))  
 </code></pre>
 
 <pre><code>##    user  system elapsed 
-##   1.969   0.544   6.586
+##   1.773   0.677   7.052
 </code></pre>
 
 <pre><code class="r">system.time(dbGetQuery(db, &quot;select * from questions where viewcount &gt; 10000&quot;))   
 </code></pre>
 
 <pre><code>##    user  system elapsed 
-##   0.031   0.045   0.985
+##   0.039   0.021   0.962
 </code></pre>
 
 <pre><code class="r">## restore earlier state by removing index
