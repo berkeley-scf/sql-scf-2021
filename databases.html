@@ -696,10 +696,35 @@ dbWriteTable(conn = db, name = &quot;student&quot;, value = student, row.names =
 <p>Let&#39;s see an example of building up a (somewhat) more complicated query in pieces, using the tools discussed above.</p>
 
 <ol>
-<li><p>First suppose we want to find the number of users who have asked questions.</p></li>
-<li><p>How about finding the users who have asked at least 50 questions? How do we determine the number of questions per user? What are we grouping by?</p></li>
-<li><p>What if we wanted actual information about the users, not just their ID? We need information from the users table.</p></li>
-<li><p><strong><em>Challenge</em></strong>: What if we wanted to count the number of users who have asked at least 50 questions? We&#39;ll discuss one way to do this later.</p></li>
+<li>First suppose we want to find the number of users who have asked questions.</li>
+</ol>
+
+<pre><code class="r">## total number of questions
+dbGetQuery(db, &quot;select count(*) from questions&quot;)
+## number of unique users asking questions
+dbGetQuery(db, &quot;select count(distinct ownerid) from questions&quot;)
+</code></pre>
+
+<ol>
+<li>How about finding the users who have asked at least 50 questions? How do we determine the number of questions per user? What are we grouping by?</li>
+</ol>
+
+<pre><code class="r">dbGetQuery(db, &quot;select ownerid, count(*) as n from questions group by ownerid
+                 having n &gt;= 50 order by n desc limit 5&quot;)
+</code></pre>
+
+<ol>
+<li>What if we wanted actual information about the users, not just their ID? We need information from the users table.</li>
+</ol>
+
+<pre><code class="r">dbGetQuery(db, &quot;select displayname, reputation, ownerid, count(*) as n from questions join users
+                 on questions.ownerid = users.userid
+                 group by questions.ownerid
+                 having n &gt;= 50 order by n desc limit 5&quot;)
+</code></pre>
+
+<ol>
+<li><strong><em>Challenge</em></strong>: What if we wanted to count the number of users who have asked at least 50 questions? We&#39;ll discuss one way to do this later.</li>
 </ol>
 
 <h1>4) More advanced SQL</h1>
@@ -825,7 +850,7 @@ How many rows are in the result?</p>
 </code></pre>
 
 <pre><code>##    user  system elapsed 
-##   7.790   2.788  29.180
+##   7.909   2.847  29.480
 </code></pre>
 
 <p>Alternatively we can do a self-join. Note that the syntax gets complicated as we are doing multiple joins.</p>
@@ -844,7 +869,7 @@ How many rows are in the result?</p>
 </code></pre>
 
 <pre><code>##    user  system elapsed 
-##  14.930  15.039  48.788
+##  15.788  15.353  53.090
 </code></pre>
 
 <pre><code class="r">identical(result1, result2)
@@ -1136,21 +1161,21 @@ dbGetQuery(db, &quot;select * from questionsAugment where age &gt; 70 limit 5&qu
 </code></pre>
 
 <pre><code>##    user  system elapsed 
-##   0.403   0.361   2.473
+##   0.369   0.377   2.453
 </code></pre>
 
 <pre><code class="r">system.time(dbExecute(db, &quot;create index count_index on questions (viewcount)&quot;))  
 </code></pre>
 
 <pre><code>##    user  system elapsed 
-##   1.773   0.677   7.052
+##   1.852   0.588   7.220
 </code></pre>
 
 <pre><code class="r">system.time(dbGetQuery(db, &quot;select * from questions where viewcount &gt; 10000&quot;))   
 </code></pre>
 
 <pre><code>##    user  system elapsed 
-##   0.039   0.021   0.962
+##   0.004   0.061   0.965
 </code></pre>
 
 <pre><code class="r">## restore earlier state by removing index
